@@ -188,7 +188,12 @@ td .s.back { color: var(--ok); }
 
 /* ---------- Diálogos ---------- */
 dialog { border: 1px solid var(--line2); border-radius: 20px; padding: 0; background: var(--bg2); color: var(--tx); width: min(560px, calc(100vw - 32px)); margin: auto; }
-dialog.wide { width: min(900px, calc(100vw - 32px)); }
+dialog.wide { width: min(980px, calc(100vw - 32px)); }
+dialog { max-height: calc(100vh - 40px); overflow: auto; }
+.chip.btnchip { cursor: pointer; } .chip.btnchip:hover { filter: brightness(1.25); }
+.secf { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--acc); margin-top: 8px; }
+.row3 { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 12px; }
+@media (max-width: 560px) { .row3 { grid-template-columns: 1fr; } #honForm { grid-template-columns: 1fr 1fr !important; } }
 dialog::backdrop { background: rgba(0,0,0,.62); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
 dialog form, dialog .body { padding: 24px; display: grid; gap: 14px; }
 dialog h2 { font-size: 20px; font-weight: 300; letter-spacing: .02em; }
@@ -255,9 +260,11 @@ tr:hover .copy { opacity: 1; }
 <div class="toast" id="toast"></div>
 
 <!-- Alta / ficha de cliente -->
-<dialog id="dlgCliente">
+<dialog id="dlgCliente" class="wide">
   <form method="dialog" id="fCliente">
     <h2 id="fClienteTit">Nuevo cliente</h2>
+    <div id="fichaResumen"></div>
+    <div class="secf">Datos fiscales</div>
     <label>Nombre o razón social<input name="nombre" required placeholder="Café Lumbre"></label>
     <div class="row2">
       <label>NIF / CIF<input name="nif" required placeholder="B12345678"></label>
@@ -290,11 +297,36 @@ tr:hover .copy { opacity: 1; }
       </label>
       <label>Rendimiento neto del año anterior<input name="rendimientoAnterior" type="number" step="0.01" placeholder="Para la casilla 13 del 130"></label>
     </div>
-    <label>Actividad<input name="actividad" placeholder="Cafetería, hostelería"></label>
+    <div class="row2">
+      <label>Actividad<input name="actividad" placeholder="Cafetería, hostelería"></label>
+      <label>Epígrafe IAE / CNAE<input name="epigrafeIae" placeholder="IAE 673.2 · CNAE 5630"></label>
+    </div>
+    <div class="row2">
+      <label>Fecha de alta en la actividad<input name="fechaAltaActividad" type="date"></label>
+      <label>IBAN (domiciliaciones)<input name="iban" placeholder="ES00 0000 0000 0000 0000 0000" autocomplete="off"></label>
+    </div>
+    <div class="secf">Contacto y domicilio fiscal</div>
+    <label>Domicilio fiscal<input name="domicilio" placeholder="Calle, número, piso"></label>
+    <div class="row3">
+      <label>Población<input name="poblacion"></label>
+      <label>Código postal<input name="codigoPostal" inputmode="numeric"></label>
+      <label>Provincia<input name="provincia"></label>
+    </div>
+    <div class="row2">
+      <label>Teléfono<input name="telefono" type="tel"></label>
+      <label>Persona de contacto<input name="contacto"></label>
+    </div>
+    <div class="secf">Tus honorarios</div>
+    <div class="row2">
+      <label>Cuota mensual (€)<input name="cuotaMensual" type="number" step="0.01" placeholder="p. ej. 80"></label>
+      <label>Tarifa por hora (€)<input name="tarifaHora" type="number" step="0.01" placeholder="la de ⚙ Ajustes"></label>
+    </div>
+    <label>Notas internas<input name="notas" placeholder="Solo las ves tú"></label>
     <div class="toggle" id="fClienteEnviarFila"><span>Enviarle ya la invitación por correo (carpetas + dashboard)</span><input type="checkbox" name="enviarInvitacion"></div>
     <div><div class="lbl" style="margin-bottom:8px">Color</div><div class="swatches" id="swatches"></div></div>
     <p class="note" id="fClienteNota" style="margin:0">Se crearán en tu Drive dos carpetas, <b>COMPRAS</b> y <b>VENTAS</b> (con <b>Tickets TPV</b> dentro), compartidas con el email del cliente sin avisos sueltos de Google. Cuando quieras, le envías un único correo con todo desde «Compartir». Tu carpeta de contabilidad es privada.</p>
     <div class="actions">
+      <button class="btn" type="button" id="fClienteBaja" style="margin-right:auto;color:var(--err);border-color:rgba(229,115,115,.35)">Dar de baja</button>
       <button class="btn" value="cancel" formnovalidate>Cancelar</button>
       <button class="btn primary" id="fClienteOk" value="ok"><span class="spin"></span><span id="fClienteOkTxt">Crear cliente</span></button>
     </div>
@@ -315,6 +347,9 @@ tr:hover .copy { opacity: 1; }
       <div class="note" id="calInfo"></div>
     </div>
     <div class="toggle"><span>Revisar carpetas automáticamente cada 15 min</span><input type="checkbox" name="trigger"></div>
+    <div class="toggle"><span>Ordenar las carpetas del cliente por año y mes (para inspecciones)</span><input type="checkbox" name="ordenarMeses"></div>
+    <label>Tu tarifa por hora por defecto (€)<input name="tarifaHora" type="number" step="0.01" placeholder="p. ej. 45"></label>
+    <div><div class="lbl" style="margin-bottom:6px">Clientes dados de baja</div><div id="bajasInfo" class="note" style="margin:0"></div></div>
     <div class="toggle"><span>Releer con Opus las facturas que Haiku lea con dudas</span><input type="checkbox" name="escalarOpus"></div>
     <div>
       <div class="toggle"><span>Token de conexión con HARVI</span><button class="btn sm" type="button" id="tokBtn">Generar</button></div>
@@ -342,6 +377,24 @@ tr:hover .copy { opacity: 1; }
       <button class="btn" type="button" id="enlaceCopiar">Copiar enlace</button>
       <button class="btn" type="button" onclick="document.getElementById('dlgEnlace').close()">Cerrar</button>
     </div>
+  </div>
+</dialog>
+
+<!-- Detalle (avisos / seguridad) -->
+<dialog id="dlgDetalle" class="wide">
+  <div class="body">
+    <div><h2 id="detTit"></h2><div class="sub" id="detSub"></div></div>
+    <div id="detBody"></div>
+    <div class="actions"><span id="detAcciones"></span><button class="btn primary" type="button" onclick="document.getElementById('dlgDetalle').close()">Cerrar</button></div>
+  </div>
+</dialog>
+
+<!-- Honorarios -->
+<dialog id="dlgHon" class="wide">
+  <div class="body">
+    <div><h2 id="honTit">Honorarios</h2><div class="sub" id="honSub"></div></div>
+    <div id="honBody"></div>
+    <div class="actions"><button class="btn primary" type="button" onclick="document.getElementById('dlgHon').close(); if (S.g && !S.id) verGeneral();">Cerrar</button></div>
   </div>
 </dialog>
 
@@ -546,7 +599,7 @@ function render() {
       ${pendientes ? `<span class="chip warn">${pendientes} por revisar</span>` : `<span class="chip good">✓ Al día</span>`}
       ${p.ultimo ? `<span class="chip">Actualizado ${fechaCorta(p.ultimo)}</span>` : ''}
       ${d.cerrado ? `<span class="chip">Ejercicio ${d.year} cerrado</span>` : ''}
-      ${cli ? '' : `<button class="btn sm" id="fichaBtn">Ficha</button><button class="btn sm" id="enlaceBtn">Compartir con el cliente</button><button class="btn sm primary" id="borBtn">Borradores ${d.tLiquidar}T</button>`}
+      ${cli ? '' : `<button class="btn sm" id="fichaBtn">Ficha</button><button class="btn sm" id="honBtn">Honorarios</button><button class="btn sm" id="enlaceBtn">Compartir con el cliente</button><button class="btn sm primary" id="borBtn">Borradores ${d.tLiquidar}T</button>`}
     </div>
   </div>
 
@@ -624,6 +677,7 @@ function render() {
     $('#borBtn').onclick = () => abrirBorradores(d.tLiquidar);
     $('#enlaceBtn').onclick = () => abrirEnlace(false);
     $('#fichaBtn').onclick = () => abrirFicha(S.clientes.find(x => x.id === S.id));
+    $('#honBtn').onclick = () => abrirHonorarios(S.id);
   }
 }
 
@@ -912,7 +966,7 @@ if (MODO === 'asesor') {
     e.preventDefault();
     const f = e.target;
     try {
-      await api('apiGuardarAjustes', { apiKey: f.apiKey.value, trigger: f.trigger.checked, publicUrl: f.publicUrl.value, escalarOpus: f.escalarOpus.checked, nombreAsesoria: f.nombreAsesoria.value, clientUrl: f.clientUrl.value, icalUrl: f.icalUrl.value });
+      await api('apiGuardarAjustes', { apiKey: f.apiKey.value, trigger: f.trigger.checked, publicUrl: f.publicUrl.value, escalarOpus: f.escalarOpus.checked, nombreAsesoria: f.nombreAsesoria.value, clientUrl: f.clientUrl.value, icalUrl: f.icalUrl.value, ordenarMeses: f.ordenarMeses.checked, tarifaHora: f.tarifaHora.value });
       $('#dlgAjustes').close(); toast('Ajustes guardados');
     } catch (err) { toast(err.message || err); }
   };
@@ -926,6 +980,7 @@ if (MODO === 'asesor') {
     } catch (err) { toast(err.message || err); }
     busy(b, false);
   };
+  $('#fClienteBaja').onclick = darDeBaja;
   $('#enlaceRenovar').onclick = () => { if (confirm('El enlace actual dejará de funcionar. ¿Renovar?')) abrirEnlace(true); };
 }
 
@@ -940,7 +995,11 @@ function abrirFicha(c) {
   $('#fClienteNota').style.display = c ? 'none' : '';
   $('#fClienteEnviarFila').style.display = c ? 'none' : '';
   f.nif.readOnly = !!c;
-  if (c) ['nombre', 'nif', 'email', 'forma', 'regimenIva', 'tipoActividad', 'rendimientoAnterior', 'actividad'].forEach(k => { if (f[k]) f[k].value = c[k] == null ? '' : c[k]; });
+  if (c) ['nombre', 'nif', 'email', 'forma', 'regimenIva', 'tipoActividad', 'rendimientoAnterior', 'actividad', 'epigrafeIae', 'fechaAltaActividad', 'iban',
+    'domicilio', 'poblacion', 'codigoPostal', 'provincia', 'telefono', 'contacto', 'cuotaMensual', 'tarifaHora', 'notas'].forEach(k => { if (f[k]) f[k].value = c[k] == null ? '' : c[k]; });
+  $('#fClienteBaja').style.display = c ? '' : 'none';
+  $('#fichaResumen').innerHTML = '';
+  if (c) pintarResumenFicha(c.id);
   $('#swatches').innerHTML = COLORES.map(x => `<button type="button" style="background:${x}" data-c="${x}" class="${x === colorNuevo ? 'on' : ''}" aria-label="Color ${x}"></button>`).join('');
   $('#swatches').onclick = e => { const b = e.target.closest('[data-c]'); if (!b) return; colorNuevo = b.dataset.c; $('#swatches').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); };
   $('#dlgCliente').showModal();
@@ -949,6 +1008,13 @@ function abrirFicha(c) {
 function pintarAjustes(a) {
   $('#keyState').textContent = a.tieneApiKey ? '· configurada ✓' : '· sin configurar';
   $('#fAjustes').trigger.checked = !!a.trigger;
+  $('#fAjustes').ordenarMeses.checked = a.ordenarMeses !== false;
+  $('#fAjustes').tarifaHora.value = a.tarifaHora || '';
+  $('#bajasInfo').innerHTML = (a.clientesBaja || []).length ? a.clientesBaja.map(b => `<div class="toggle" style="padding:4px 0"><span>${esc(b.nombre)} <span class="sub">${esc(b.nif)}${b.baja ? ' · baja ' + esc(b.baja) : ''}</span></span><button class="btn sm" type="button" data-reactivar="${esc(b.id)}">Reactivar</button></div>`).join('') : 'Ninguno.';
+  $('#bajasInfo').querySelectorAll('[data-reactivar]').forEach(b => b.onclick = async () => {
+    try { const r = await api('apiReactivarCliente', b.dataset.reactivar); toast(r.nombre + ' reactivado: vuelve a enviarle la invitación para darle acceso'); S.clientes = await api('apiListarClientes'); pintarMenu(); pintarAjustes(await api('apiEstadoAjustes')); }
+    catch (e) { toast(e.message || e); }
+  });
   $('#fAjustes').escalarOpus.checked = a.escalarOpus !== false;
   $('#fAjustes').apiKey.value = '';
   $('#fAjustes').publicUrl.value = a.publicUrl || '';
@@ -1029,8 +1095,8 @@ function renderGeneral() {
     <div class="avatar" style="border-color:var(--acc);color:var(--acc)">∑</div>
     <div><h1>Vista general</h1><div class="meta">${g.clientes.length} cliente${g.clientes.length === 1 ? '' : 's'} · ${g.year}</div></div>
     <div class="chips">
-      ${altas ? `<span class="chip crit">${altas} aviso${altas === 1 ? '' : 's'} urgente${altas === 1 ? '' : 's'}</span>` : '<span class="chip good">✓ Sin urgencias</span>'}
-      <span class="chip ${seg.bloqueado ? 'crit' : seg.fallos24h ? 'warn' : 'good'}">${seg.bloqueado ? '⛨ Bloqueo activo' : seg.fallos24h ? '⛨ ' + seg.fallos24h + ' intentos sospechosos' : '⛨ Seguro'}</span>
+      ${altas ? `<button class="chip crit btnchip" id="chipAvisos">${altas} aviso${altas === 1 ? '' : 's'} urgente${altas === 1 ? '' : 's'} ›</button>` : `<button class="chip good btnchip" id="chipAvisos">✓ Sin urgencias${g.alertas.length ? ' · ' + g.alertas.length + ' avisos ›' : ''}</button>`}
+      <button class="chip btnchip ${seg.bloqueado ? 'crit' : seg.fallos24h ? 'warn' : 'good'}" id="chipSeg">${seg.bloqueado ? '⛨ Bloqueo activo' : seg.fallos24h ? '⛨ ' + seg.fallos24h + ' intentos sospechosos' : '⛨ Seguro'} ›</button>
       <button class="btn sm" id="recalcTodo"><span class="spin"></span>↻ Recalcular todo</button>
     </div>
   </div>
@@ -1051,7 +1117,7 @@ function renderGeneral() {
       <div class="chart" id="diario"></div>
       <div class="legend" style="margin-top:8px"><span><b style="background:var(--s1)"></b>Ingresos</span><span><b style="background:var(--s2)"></b>Gastos</span></div>
     </div>
-    <div class="card"><div class="head"><div><h3>Avisos</h3><div class="sub">Plazos, revisiones, actividad y seguridad</div></div></div><div id="avisos"></div></div>
+    <div class="card"><div class="head"><div><h3>Avisos</h3><div class="sub">Plazos, revisiones, actividad y seguridad</div></div><button class="btn sm" id="avisosTodos">Ver todos</button></div><div id="avisos"></div></div>
   </section>
 
   <section class="grid g-2">
@@ -1083,6 +1149,9 @@ function renderGeneral() {
   pintarMensual({ mensual: mensual, year: g.year });
   pintarTablaClientes(g);
   pintarSeguridad(seg);
+  $('#chipAvisos').onclick = verAvisos;
+  $('#avisosTodos').onclick = verAvisos;
+  $('#chipSeg').onclick = verSeguridad;
   $('#recalcTodo').onclick = async e => { busy(e.currentTarget, true); try { const n = await api('apiRecalcularTodo', S.year); toast(n + ' clientes recalculados'); verGeneral(); } catch (err) { toast(err.message || err); busy(e.currentTarget, false); } };
   document.querySelectorAll('[data-cli]').forEach(el => el.onclick = () => { if (el.dataset.cli) seleccionar(el.dataset.cli); });
 }
@@ -1160,7 +1229,7 @@ function sparkMini(valores, color) {
 
 function pintarTablaClientes(g) {
   const mesHoy = g.year === Number(g.hoy.slice(0, 4)) ? Number(g.hoy.slice(5, 7)) : 12;
-  $('#tablaClientes').innerHTML = `<table><thead><tr><th>Cliente</th><th>Facturación</th><th>Trimestre</th><th>IVA próximo</th><th>IRPF próximo</th><th>Docs</th><th>Pendiente</th><th>Última factura</th><th>Tendencia</th></tr></thead><tbody>
+  $('#tablaClientes').innerHTML = `<table><thead><tr><th>Cliente</th><th>Facturación</th><th>Trimestre</th><th>IVA próximo</th><th>IRPF próximo</th><th>Docs</th><th>Pendiente</th><th>Última factura</th><th>Te debe</th><th>Tendencia</th></tr></thead><tbody>
     ${g.clientes.slice().sort((a, b) => b.ingresos - a.ingresos).map(c => {
       const t = (c.trimestres || [])[(c.tLiquidar || 1) - 1] || {};
       const tc = (c.trimestres || [])[(c.tEnCurso || 1) - 1] || {};
@@ -1172,6 +1241,7 @@ function pintarTablaClientes(g) {
         <td>${c.aplica && c.aplica.irpf130 ? eur2(t.irpf || 0) + `<span class="s">${c.tLiquidar || ''}T</span>` : '<span class="s">—</span>'}</td>
         <td>${c.documentos}</td><td>${pend ? `<span class="chip warn">${pend}</span>` : '<span class="s">—</span>'}</td>
         <td>${c.ultimaFecha ? fechaCorta(c.ultimaFecha) : '<span class="s">—</span>'}</td>
+        <td>${c.honorarios && c.honorarios.pendienteCobro > 0.5 ? `<span style="color:var(--acc2)">${eur2(c.honorarios.pendienteCobro)}</span>` : '<span class="s">—</span>'}</td>
         <td>${sparkMini((c.mensual || []).slice(0, mesHoy).map(m => m[0]), c.color || '#c9a96e')}</td></tr>`;
     }).join('')}</tbody></table>`;
 }
@@ -1184,7 +1254,189 @@ function pintarSeguridad(seg) {
       <div><div class="lbl">Último bloqueo</div><div class="sub" style="margin-top:10px">${seg.ultimoBloqueo ? esc(seg.ultimoBloqueo) : 'Ninguno'}</div></div>
     </div>
     ${(seg.ultimos || []).length ? `<div style="margin-top:14px">${seg.ultimos.map(u => `<div class="rev"><span class="chip ${u.resultado === 'BLOQUEO' ? 'crit' : 'warn'}">${esc(u.resultado)}</span><div class="grow"><div>${esc(u.canal)} <span class="sub">· ${esc(u.fecha)}</span></div><div class="why">${esc(u.detalle)}</div></div></div>`).join('')}</div>` : ''}
-    <p class="note">Registro completo en la hoja «Seguridad» del Maestro. Si ves algo raro: renueva los enlaces de los clientes afectados y el token de HARVI.</p>`;
+    <div class="actions" style="justify-content:flex-start"><button class="btn sm" id="segDetalle">Ver registro completo</button></div>
+    <p class="note">Si ves algo raro: renueva los enlaces de los clientes afectados y el token de HARVI.</p>`;
+  $('#segDetalle').onclick = verSeguridad;
+}
+
+/* =========================================================================
+   Detalle de avisos y seguridad
+   ========================================================================= */
+function abrirDetalle(titulo, sub, html) {
+  $('#detTit').textContent = titulo; $('#detSub').textContent = sub || ''; $('#detBody').innerHTML = html;
+  $('#detAcciones').innerHTML = '';
+  if (!$('#dlgDetalle').open) $('#dlgDetalle').showModal();
+}
+
+function verAvisos() {
+  const g = S.g; if (!g) return;
+  const nombres = { alta: 'Urgentes', media: 'Importantes', baja: 'Para cuando puedas' };
+  const html = ['alta', 'media', 'baja'].map(n => {
+    const l = g.alertas.filter(a => a.nivel === n);
+    if (!l.length) return '';
+    return `<div class="lbl" style="margin:14px 0 4px">${nombres[n]} · ${l.length}</div>` + l.map(a => `<div class="rev" data-cli="${esc(a.clienteId || '')}" style="cursor:${a.clienteId ? 'pointer' : 'default'}">
+      <span class="chip ${n === 'alta' ? 'crit' : n === 'media' ? 'warn' : ''}" style="min-width:110px;justify-content:center">${esc(a.cliente || 'CONTABLE')}</span>
+      <div class="grow"><div class="why" style="color:var(--tx)">${esc(a.texto)}</div>${a.fecha ? `<div class="sub">${fechaCorta(a.fecha)} · ${cuando(a.fecha, g.hoy)}</div>` : ''}</div>
+      ${a.clienteId ? '<span class="sub">Abrir →</span>' : ''}</div>`).join('');
+  }).join('') || '<div class="na">✓ No hay avisos.</div>';
+  abrirDetalle('Avisos', g.alertas.length + ' en total · pulsa uno para ir al cliente', html);
+  $('#detBody').querySelectorAll('[data-cli]').forEach(el => el.onclick = () => { if (el.dataset.cli) { $('#dlgDetalle').close(); seleccionar(el.dataset.cli); } });
+}
+
+async function verSeguridad() {
+  abrirDetalle('Seguridad', 'Cargando registro…', '<div class="skel" style="height:240px"></div>');
+  try {
+    const r = await api('apiSeguridadDetalle');
+    const e = r.estado;
+    const fila = x => `<tr style="${x.nuevo && x.resultado !== 'OK' ? 'background:var(--acc-bg)' : ''}">
+      <td>${esc(x.fecha)}</td><td style="text-align:left">${esc(x.canal)}</td>
+      <td style="text-align:left"><span class="chip ${x.resultado === 'OK' ? 'good' : x.resultado === 'BLOQUEO' ? 'crit' : x.resultado === 'BAJA' ? '' : 'warn'}">${esc(x.resultado)}</span></td>
+      <td style="text-align:left;white-space:normal">${esc(x.detalle)}</td></tr>`;
+    const sospechosos = r.eventos.filter(x => x.resultado !== 'OK' && x.resultado !== 'BAJA');
+    const html = `<div class="aviso" style="margin-bottom:12px">${e.bloqueado ? '⛨ <b>Bloqueo activo:</b> ' + esc(e.bloqueado) : `⛨ <b>${e.fallos24h || 0}</b> intento(s) no válidos ${e.revisadoHasta ? 'desde tu última revisión (' + esc(e.revisadoHasta) + ')' : 'en las últimas 24 h'}.`}
+        Un intento no válido es alguien abriendo un enlace de cliente caducado o inventado, o usando un token de HARVI/calendario incorrecto. Los que ves al instalar son las pruebas que hice yo.</div>
+      <div class="lbl" style="margin:10px 0 6px">Intentos y bloqueos · ${sospechosos.length}</div>
+      <div class="tablewrap"><table><thead><tr><th>Fecha</th><th style="text-align:left">Canal</th><th style="text-align:left">Resultado</th><th style="text-align:left">Detalle</th></tr></thead>
+      <tbody>${sospechosos.map(fila).join('') || '<tr><td colspan="4"><span class="s">Ninguno</span></td></tr>'}</tbody></table></div>
+      <div class="lbl" style="margin:18px 0 6px">Accesos correctos recientes</div>
+      <div class="tablewrap"><table><tbody>${r.eventos.filter(x => x.resultado === 'OK' || x.resultado === 'BAJA').slice(0, 30).map(fila).join('') || '<tr><td><span class="s">Ninguno</span></td></tr>'}</tbody></table></div>`;
+    abrirDetalle('Seguridad', 'Registro de accesos públicos (dashboards de clientes, HARVI y calendario)', html);
+    $('#detAcciones').innerHTML = '<button class="btn" type="button" id="segVisto">Marcar intentos como revisados</button>';
+    $('#segVisto').onclick = async () => { await api('apiSeguridadVisto'); toast('Intentos marcados como revisados'); $('#dlgDetalle').close(); verGeneral(); };
+  } catch (err) { abrirDetalle('Seguridad', '', `<div class="aviso">${esc(err.message || err)}</div>`); }
+}
+
+/* =========================================================================
+   Honorarios y cronómetro
+   ========================================================================= */
+const cron = {
+  leer() { try { return JSON.parse(store.get('cronometro') || 'null'); } catch (e) { return null; } },
+  guardar(v) { store.set('cronometro', v ? JSON.stringify(v) : ''); },
+};
+function minutosDesde(t) { return Math.max(1, Math.round((Date.now() - t) / 60000)); }
+function hm(min) { min = Math.round(min || 0); return Math.floor(min / 60) + ' h ' + String(min % 60).padStart(2, '0') + ' min'; }
+
+function pintarCronoTop() {
+  if (MODO !== 'asesor') return;
+  const c = cron.leer();
+  let el = $('#cronoTop');
+  if (!c) { if (el) el.remove(); return; }
+  if (!el) {
+    el = document.createElement('button');
+    el.id = 'cronoTop'; el.className = 'btn sm';
+    el.style.borderColor = 'var(--acc-soft)'; el.style.color = 'var(--acc2)';
+    $('#procBtn').before(el);
+    el.onclick = () => abrirHonorarios(c.id);
+  }
+  const s = Math.floor((Date.now() - c.inicio) / 1000);
+  el.textContent = '⏱ ' + String(Math.floor(s / 3600)).padStart(2, '0') + ':' + String(Math.floor(s / 60) % 60).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0') + ' · ' + c.nombre;
+}
+setInterval(pintarCronoTop, 1000);
+
+async function abrirHonorarios(id) {
+  S.honId = id || S.id;
+  const c = S.clientes.find(x => x.id === S.honId) || {};
+  $('#honTit').textContent = 'Honorarios · ' + (c.nombre || '');
+  $('#honBody').innerHTML = '<div class="skel" style="height:300px"></div>';
+  if (!$('#dlgHon').open) $('#dlgHon').showModal();
+  try { pintarHonorarios(await api('apiHonorarios', S.honId)); }
+  catch (e) { $('#honBody').innerHTML = `<div class="aviso">${esc(e.message || e)}</div>`; }
+}
+
+function pintarHonorarios(h) {
+  const r = h.resumen, c = h.cliente;
+  const cr = cron.leer();
+  const corriendo = cr && cr.id === c.id;
+  const hoy = new Date().toISOString().slice(0, 10);
+  $('#honSub').textContent = 'Cliente desde ' + (c.alta ? fechaCorta(c.alta) + ' ' + c.alta.slice(0, 4) : '—') + ' · tarifa ' + (c.tarifaHora ? eur2(c.tarifaHora) + '/h' : 'sin tarifa (ponla en la ficha o en ⚙ Ajustes)') + (c.cuotaMensual ? ' · cuota ' + eur2(c.cuotaMensual) + '/mes' : '');
+  $('#honBody').innerHTML = `
+    <div class="grid g-kpi" style="gap:10px">
+      <div class="card" style="padding:14px"><h3>Facturado</h3><div class="kpi-num num" style="font-size:22px">${eur2(r.facturado)}</div><div class="sub">${eur2(r.facturadoAnio)} este año</div></div>
+      <div class="card" style="padding:14px"><h3>Cobrado</h3><div class="kpi-num num" style="font-size:22px">${eur2(r.cobrado)}</div><div class="sub">${eur2(r.cobradoAnio)} este año</div></div>
+      <div class="card" style="padding:14px"><h3>Pendiente de cobro</h3><div class="kpi-num num" style="font-size:22px;color:${r.pendienteCobro > 0.5 ? 'var(--acc2)' : 'inherit'}">${eur2(r.pendienteCobro)}</div><div class="sub">facturas − cobros</div></div>
+      <div class="card" style="padding:14px"><h3>Tiempo sin facturar</h3><div class="kpi-num num" style="font-size:22px">${hm(r.minutosSinFacturar)}</div><div class="sub">${eur2(r.importeSinFacturar)} · ${hm(r.minutosMes)} este mes</div></div>
+    </div>
+    <div class="card" style="margin-top:12px;padding:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <div class="grow" style="flex:1;min-width:200px"><h3>Cronómetro</h3><div class="sub">${corriendo ? 'En marcha desde las ' + new Date(cr.inicio).toTimeString().slice(0, 5) + ' · ' + hm(minutosDesde(cr.inicio)) : cr ? 'Hay un cronómetro en marcha con ' + esc(cr.nombre) : 'Cuenta el tiempo que dedicas a este cliente'}</div></div>
+      ${corriendo ? '<input id="cronoConcepto" placeholder="¿Qué has hecho? (opcional)" style="height:36px;border:1px solid var(--line);border-radius:10px;background:var(--bg);padding:0 10px;color:var(--tx);min-width:220px"><button class="btn primary" id="cronoParar">■ Parar y guardar</button><button class="btn" id="cronoDescartar">Descartar</button>'
+        : `<button class="btn primary" id="cronoIniciar" ${cr ? 'disabled' : ''}>▶ Iniciar</button>`}
+    </div>
+    <div class="card" style="margin-top:12px;padding:14px">
+      <h3>Añadir movimiento</h3>
+      <div style="display:grid;grid-template-columns:120px 140px 1fr 110px 110px auto;gap:8px;margin-top:10px;align-items:end" id="honForm">
+        <label>Tipo<select name="tipo"><option value="tiempo">Tiempo</option><option value="factura">Factura</option><option value="cobro">Cobro</option></select></label>
+        <label>Fecha<input name="fecha" type="date" value="${hoy}"></label>
+        <label>Concepto<input name="concepto" placeholder="Declaración 3T, consulta…"></label>
+        <label>Horas<input name="horas" placeholder="1:30"></label>
+        <label>Importe €<input name="importe" type="number" step="0.01" placeholder="auto"></label>
+        <button class="btn primary" id="honAdd" style="height:42px">Añadir</button>
+      </div>
+      <div class="actions" style="justify-content:flex-start;margin-top:10px">
+        ${c.cuotaMensual ? `<button class="btn sm" id="honCuota">＋ Facturar cuota del mes (${eur2(c.cuotaMensual)})</button>` : ''}
+        <button class="btn sm" id="honFacturarTiempo" ${r.minutosSinFacturar ? '' : 'disabled'}>Facturar tiempo pendiente (${eur2(r.importeSinFacturar)})</button>
+      </div>
+    </div>
+    <div class="card" style="margin-top:12px;padding:14px"><h3>Movimientos</h3>
+      <div class="tablewrap"><table><thead><tr><th>Fecha</th><th style="text-align:left">Tipo</th><th style="text-align:left">Concepto</th><th>Tiempo</th><th>Importe</th><th></th></tr></thead><tbody>
+      ${h.movimientos.map(m => `<tr><td>${fechaCorta(m.fecha)} <span class="s">${m.fecha.slice(0, 4)}</span></td>
+        <td style="text-align:left"><span class="chip ${m.tipo === 'cobro' ? 'good' : m.tipo === 'factura' ? 'warn' : ''}">${m.tipo === 'tiempo' ? 'Tiempo' + (m.estado === 'facturado' ? ' · facturado' : '') : m.tipo === 'factura' ? 'Factura' : 'Cobro'}</span></td>
+        <td style="text-align:left;white-space:normal">${esc(m.concepto)}</td><td>${m.minutos ? hm(m.minutos) : ''}</td>
+        <td>${m.tipo === 'cobro' ? '−' : ''}${eur2(m.importe)}</td>
+        <td><button class="btn sm" data-borrar="${esc(m.id)}" title="Borrar">✕</button></td></tr>`).join('') || '<tr><td colspan="6"><span class="s">Aún no hay movimientos</span></td></tr>'}
+      </tbody></table></div></div>`;
+  const id = c.id;
+  const recargar = async p => { try { pintarHonorarios(await p); pintarCronoTop(); } catch (e) { toast(e.message || e); } };
+  if ($('#cronoIniciar')) $('#cronoIniciar').onclick = () => { cron.guardar({ id: id, nombre: c.nombre, inicio: Date.now() }); pintarCronoTop(); pintarHonorarios(h); };
+  if ($('#cronoParar')) $('#cronoParar').onclick = () => {
+    const x = cron.leer(); cron.guardar(null);
+    recargar(api('apiGuardarMovimiento', id, { tipo: 'tiempo', minutos: minutosDesde(x.inicio), concepto: $('#cronoConcepto').value || 'Trabajo de asesoría', fecha: hoy }));
+  };
+  if ($('#cronoDescartar')) $('#cronoDescartar').onclick = () => { if (confirm('¿Descartar el tiempo del cronómetro?')) { cron.guardar(null); pintarCronoTop(); pintarHonorarios(h); } };
+  $('#honAdd').onclick = () => {
+    const f = $('#honForm'), v = n => f.querySelector('[name=' + n + ']').value;
+    const t = v('tipo');
+    let minutos = 0;
+    const hs = v('horas').trim();
+    if (hs) { const p = hs.split(/[:h ,.]+/).filter(Boolean); minutos = hs.includes(':') || p.length > 1 ? Number(p[0]) * 60 + Number(p[1] || 0) : Math.round(Number(hs.replace(',', '.')) * 60); }
+    if (t === 'tiempo' && !minutos) return toast('Indica las horas (por ejemplo 1:30)');
+    if (t !== 'tiempo' && !v('importe')) return toast('Indica el importe');
+    recargar(api('apiGuardarMovimiento', id, { tipo: t, fecha: v('fecha'), concepto: v('concepto'), minutos: minutos, importe: v('importe') }));
+  };
+  if ($('#honCuota')) $('#honCuota').onclick = () => {
+    const mes = MESES_L[new Date().getMonth()];
+    recargar(api('apiGuardarMovimiento', id, { tipo: 'factura', importe: c.cuotaMensual, concepto: 'Cuota de asesoría · ' + mes + ' ' + new Date().getFullYear() }));
+  };
+  $('#honFacturarTiempo').onclick = () => { if (confirm('Se creará una factura con todo el tiempo pendiente. ¿Continuar?')) recargar(api('apiFacturarTiempo', id)); };
+  $('#honBody').querySelectorAll('[data-borrar]').forEach(b => b.onclick = () => { if (confirm('¿Borrar este movimiento?')) recargar(api('apiBorrarMovimiento', id, b.dataset.borrar)); });
+}
+
+/* =========================================================================
+   Ficha: datos, facturación y baja
+   ========================================================================= */
+async function pintarResumenFicha(id) {
+  const box = $('#fichaResumen');
+  box.innerHTML = '<div class="skel" style="height:90px"></div>';
+  try {
+    const r = await api('apiFicha', id);
+    const h = r.honorarios;
+    box.innerHTML = `<div class="grid g-2" style="gap:10px">
+      <div class="card" style="padding:14px"><h3>Cliente desde</h3><div class="kpi-num" style="font-size:20px">${r.alta ? new Date(r.alta + 'T12:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }) : '—'}</div>
+        <div class="sub">Tus honorarios: facturado ${eur2(h.facturado)} · cobrado ${eur2(h.cobrado)} · <span style="color:${h.pendienteCobro > 0.5 ? 'var(--acc2)' : 'inherit'}">pendiente ${eur2(h.pendienteCobro)}</span></div></div>
+      <div class="card" style="padding:14px"><h3>Facturación de su negocio</h3>
+        ${r.facturacion.length ? r.facturacion.map(f => `<div class="hb" style="grid-template-columns:60px 1fr auto"><span class="l">${f.year}</span><span class="sub">${f.ingresos == null ? 'sin calcular' : 'gastos ' + eur(f.gastos) + ' · ' + f.documentos + ' docs'}</span><span class="v">${f.ingresos == null ? '—' : eur(f.ingresos)}</span></div>`).join('') : '<div class="na">Aún sin facturas.</div>'}</div>
+    </div>`;
+  } catch (e) { box.innerHTML = ''; }
+}
+
+async function darDeBaja() {
+  const c = S.clientes.find(x => x.id === S.editId);
+  if (!c || !confirm('¿Dar de baja a ' + c.nombre + '?\n\n• Dejará de ver sus carpetas y su dashboard.\n• Sus datos, libros y facturas se CONSERVAN (obligación legal de 4-6 años).\n• Podrás reactivarlo en ⚙ Ajustes.')) return;
+  try {
+    const r = await api('apiBajaCliente', c.id);
+    $('#dlgCliente').close();
+    toast(r.nombre + ' dado de baja' + (r.revocados ? ' · acceso a carpetas retirado' : ''));
+    S.clientes = await api('apiListarClientes'); pintarMenu(); verGeneral();
+  } catch (e) { toast(e.message || e); }
 }
 
 let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { if (S.id || MODO === 'cliente') { if (S.d) render(); } else if (S.g) renderGeneral(); }, 150); });
