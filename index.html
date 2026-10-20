@@ -1,0 +1,962 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a0a0c">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<title>CONTABLE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Paleta y tipografía de HARVI: oscuro, minimalista, acento dorado */
+:root {
+  color-scheme: dark;
+  --bg: #0a0a0c; --bg2: #111115; --panel: #17171c;
+  --line: #24242b; --line2: #34343d;
+  --tx: #ececef; --mut: #8b8b95; --dim: #5a5a64;
+  --acc: #c9a96e; --acc2: #e2c891; --acc-soft: #4a3f2a; --acc-bg: #17140e;
+  --ok: #5fb98a; --err: #e57373;
+  /* Series de datos (validadas sobre fondo oscuro: dorado frente a azul acero, distinguibles con daltonismo) */
+  --s1: #c9a96e;   /* ingresos */
+  --s2: #6f93c9;   /* gastos */
+  --s3: #a48fd8;   /* tickets TPV */
+  --r: 14px;
+  --accent: #c9a96e;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { background: var(--bg); color: var(--tx); }
+body { font: 15px/1.45 Inter, -apple-system, BlinkMacSystemFont, system-ui, sans-serif; -webkit-font-smoothing: antialiased; min-height: 100vh; }
+a { color: var(--acc2); text-decoration: none; }
+button, input, select { font: inherit; color: inherit; }
+button { background: none; border: 0; cursor: pointer; }
+.num { font-variant-numeric: tabular-nums; }
+::-webkit-scrollbar { width: 8px; height: 8px; } ::-webkit-scrollbar-thumb { background: var(--line2); border-radius: 8px; }
+
+/* ---------- Barra superior ---------- */
+.top {
+  position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 10px;
+  padding: 12px max(16px, calc((100vw - 1240px) / 2));
+  background: rgba(10,10,12,.82); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--line);
+}
+.brand { font-weight: 300; letter-spacing: .45em; font-size: 13px; margin-right: 10px; user-select: none; }
+.brand b { font-weight: 300; color: var(--acc); }
+.spacer { flex: 1; }
+.btn, .pill {
+  height: 36px; border-radius: 10px; border: 1px solid var(--line2); background: transparent; color: var(--tx);
+  padding: 0 14px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; font-size: 13.5px;
+  transition: border-color .15s, background .15s;
+}
+.btn:hover, .pill:hover { border-color: var(--mut); }
+.btn.primary { background: var(--acc); color: #14110b; border-color: var(--acc); font-weight: 500; }
+.btn.primary:hover { background: var(--acc2); }
+.btn.sm { height: 30px; padding: 0 10px; font-size: 12.5px; border-radius: 8px; }
+.icon { width: 36px; padding: 0; justify-content: center; color: var(--mut); }
+select.pill { appearance: none; -webkit-appearance: none; padding-right: 28px; background: transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%238b8b95' fill='none'/%3E%3C/svg%3E") no-repeat right 11px center; }
+select.pill option { background: var(--bg2); }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; display: inline-block; }
+.picker { position: relative; }
+.pill { max-width: 260px; }
+.pill .name { overflow: hidden; text-overflow: ellipsis; }
+.menu {
+  position: absolute; top: 44px; left: 0; width: 310px; max-height: 420px; overflow: auto;
+  background: var(--bg2); border: 1px solid var(--line2); border-radius: 12px; box-shadow: 0 16px 48px rgba(0,0,0,.55);
+  padding: 6px; display: none;
+}
+.menu.open { display: block; }
+.menu input { width: 100%; height: 34px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); padding: 0 10px; margin-bottom: 6px; outline: none; }
+.menu .item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; cursor: pointer; font-size: 14px; }
+.menu .item:hover, .menu .item.sel { background: var(--panel); }
+.menu .item small { color: var(--mut); display: block; font-size: 12px; }
+.menu .new { border-top: 1px solid var(--line); margin-top: 6px; padding-top: 10px; color: var(--acc); }
+.spin { width: 13px; height: 13px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: s .8s linear infinite; display: none; }
+.busy .spin { display: inline-block; }
+@keyframes s { to { transform: rotate(360deg); } }
+
+/* ---------- Layout ---------- */
+main { max-width: 1240px; margin: 0 auto; padding: 28px 16px 72px; }
+.grid { display: grid; gap: 14px; }
+.g-hero { grid-template-columns: 1.6fr 1fr; }
+.g-kpi { grid-template-columns: repeat(4, 1fr); }
+.g-2 { grid-template-columns: 1fr 1fr; }
+.g-3 { grid-template-columns: 1.2fr 1fr; }
+@media (max-width: 980px) { .g-hero, .g-2, .g-3 { grid-template-columns: 1fr; } .g-kpi { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 560px) { .g-kpi { grid-template-columns: 1fr; } .top { flex-wrap: wrap; } .brand { width: 100%; } .hide-sm { display: none; } }
+section { margin-top: 14px; }
+.card { background: var(--bg2); border: 1px solid var(--line); border-radius: var(--r); padding: 20px; min-width: 0; }
+.lbl, .card h3 { font-size: 11px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: var(--mut); }
+.card h3 { margin-bottom: 2px; }
+.sub { color: var(--dim); font-size: 12.5px; }
+.head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+.sec-title { font-size: 11px; text-transform: uppercase; letter-spacing: .14em; color: var(--mut); margin: 36px 0 12px; font-weight: 500; display: flex; align-items: center; gap: 10px; }
+.sec-title::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+
+/* ---------- Cabecera de cliente ---------- */
+.client { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 22px; }
+.avatar { width: 50px; height: 50px; border-radius: 14px; border: 1px solid var(--accent); color: var(--accent); display: grid; place-items: center; font-weight: 400; letter-spacing: .08em; font-size: 16px; flex: none; }
+.client h1 { font-weight: 300; font-size: 26px; letter-spacing: .01em; }
+.client .meta { color: var(--mut); font-size: 13px; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; margin-left: auto; align-items: center; }
+.chip { font-size: 12px; padding: 5px 11px; border: 1px solid var(--line); border-radius: 999px; color: var(--mut); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.chip.good { color: var(--ok); border-color: rgba(95,185,138,.35); }
+.chip.warn { color: var(--acc2); border-color: var(--acc-soft); background: var(--acc-bg); }
+.chip.crit { color: var(--err); border-color: rgba(229,115,115,.35); }
+
+/* ---------- Cifras ---------- */
+.hero-num { font-size: clamp(38px, 5.4vw, 58px); font-weight: 300; letter-spacing: -.02em; line-height: 1.05; margin: 10px 0 6px; }
+.kpi-num { font-size: 28px; font-weight: 300; letter-spacing: -.01em; margin: 8px 0 2px; }
+.split { display: flex; height: 6px; border-radius: 99px; overflow: hidden; gap: 2px; margin: 16px 0 10px; background: var(--panel); }
+.split i { display: block; height: 100%; }
+.legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--mut); }
+.legend b { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 6px; vertical-align: 0; }
+.due { margin-top: 10px; display: flex; gap: 6px; flex-wrap: wrap; }
+.na { color: var(--dim); font-size: 13px; margin-top: 10px; }
+
+/* ---------- Gráficos ---------- */
+.chart { width: 100%; position: relative; }
+.chart svg { display: block; overflow: visible; }
+.chart text { fill: var(--dim); font-size: 11px; font-family: Inter, system-ui, sans-serif; }
+.tip {
+  position: fixed; pointer-events: none; z-index: 50; opacity: 0; transition: opacity .08s;
+  background: var(--panel); color: var(--tx); border: 1px solid var(--line2); border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.5); padding: 10px 12px; font-size: 12px; min-width: 160px;
+}
+.tip .t { font-weight: 500; margin-bottom: 5px; }
+.tip .r { display: flex; justify-content: space-between; gap: 16px; color: var(--mut); }
+.tip .r b { color: var(--tx); font-weight: 500; }
+.tip .k { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; }
+.hb { display: grid; grid-template-columns: minmax(90px, 150px) 1fr auto; align-items: center; gap: 12px; padding: 7px 0; font-size: 13px; }
+.hb .l { color: var(--mut); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hb .track { height: 8px; background: var(--panel); border-radius: 0 4px 4px 0; }
+.hb .bar { display: block; height: 100%; border-radius: 0 4px 4px 0; min-width: 2px; }
+.hb .v { font-variant-numeric: tabular-nums; }
+.tabs { display: inline-flex; border: 1px solid var(--line2); border-radius: 10px; padding: 3px; gap: 2px; }
+.tabs button { padding: 5px 11px; border-radius: 7px; font-size: 12.5px; color: var(--mut); }
+.tabs button.on { background: var(--panel); color: var(--tx); }
+
+/* ---------- Modelos ---------- */
+.cal { display: grid; grid-template-columns: repeat(auto-fill, minmax(175px, 1fr)); gap: 12px; }
+.cal .c { border: 1px solid var(--line); border-radius: 12px; padding: 14px; background: var(--bg2); }
+.cal .c.next { border-color: var(--acc-soft); background: var(--acc-bg); }
+.cal .mod { font-size: 24px; font-weight: 300; letter-spacing: .02em; }
+.cal .c.next .mod { color: var(--acc2); }
+.cal .n { color: var(--mut); font-size: 12px; }
+.cal .amt { margin-top: 8px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: right; color: var(--dim); font-weight: 500; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+th:first-child, td:first-child { text-align: left; }
+td { text-align: right; padding: 11px 10px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td.cur, th.cur { background: var(--acc-bg); }
+th.cur { color: var(--acc); }
+td .s { display: block; font-size: 11px; color: var(--dim); }
+td .s.pay { color: var(--acc2); }
+td .s.back { color: var(--ok); }
+.tablewrap { overflow-x: auto; }
+
+/* ---------- Documentos ---------- */
+.books { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+.book { border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 10px; background: var(--bg); }
+.book .ic { width: 32px; height: 32px; border-radius: 9px; border: 1px solid var(--line2); display: grid; place-items: center; }
+.book .acts { display: flex; gap: 6px; margin-top: auto; }
+.book.off { opacity: .5; }
+.folder { display: flex; align-items: center; gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--line); color: var(--mut); }
+.folder:last-child { border-bottom: 0; }
+.folder .grow { flex: 1; min-width: 0; color: var(--tx); }
+.folder small { color: var(--dim); display: block; }
+.rev { display: flex; gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--line); align-items: flex-start; }
+.rev:last-child { border-bottom: 0; }
+.rev .grow { flex: 1; min-width: 0; }
+.rev .why { color: var(--mut); font-size: 12.5px; }
+.empty { text-align: center; padding: 80px 16px; }
+.empty h2 { font-size: 30px; font-weight: 300; margin: 0 0 10px; }
+.empty p { color: var(--mut); max-width: 460px; margin: 0 auto 22px; }
+.skel { background: linear-gradient(90deg, var(--bg2), var(--panel), var(--bg2)); background-size: 200% 100%; animation: sk 1.3s infinite; border-radius: var(--r); }
+@keyframes sk { to { background-position: -200% 0; } }
+.note { font-size: 12.5px; color: var(--mut); margin-top: 12px; line-height: 1.55; }
+.aviso { font-size: 13px; color: #cfc6b3; line-height: 1.55; background: var(--acc-bg); border: 1px solid #3a3122; border-radius: 10px; padding: 10px 12px; }
+.ro { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); }
+
+/* ---------- Diálogos ---------- */
+dialog { border: 1px solid var(--line2); border-radius: 20px; padding: 0; background: var(--bg2); color: var(--tx); width: min(560px, calc(100vw - 32px)); margin: auto; }
+dialog.wide { width: min(900px, calc(100vw - 32px)); }
+dialog::backdrop { background: rgba(0,0,0,.62); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+dialog form, dialog .body { padding: 24px; display: grid; gap: 14px; }
+dialog h2 { font-size: 20px; font-weight: 300; letter-spacing: .02em; }
+label { display: grid; gap: 6px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--mut); }
+label input, label select { height: 42px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); padding: 0 12px; color: var(--tx); font-size: 15px; letter-spacing: 0; text-transform: none; outline: none; }
+label input:focus, label select:focus { border-color: var(--acc-soft); }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 560px) { .row2 { grid-template-columns: 1fr; } }
+.actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+.swatches { display: flex; gap: 8px; }
+.swatches button { width: 24px; height: 24px; border-radius: 50%; border: 2px solid transparent; }
+.swatches button.on { border-color: var(--tx); }
+.toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 14px; }
+code { background: var(--bg); border: 1px solid var(--line); padding: 2px 6px; border-radius: 6px; font-size: 12px; word-break: break-all; }
+.toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--panel); border: 1px solid var(--line2); color: var(--tx); padding: 10px 16px; border-radius: 12px; opacity: 0; transition: .2s; z-index: 99; max-width: calc(100vw - 32px); box-shadow: 0 10px 30px rgba(0,0,0,.4); font-size: 14px; }
+.toast.show { opacity: 1; transform: translateX(-50%); }
+
+/* ---------- Borradores ---------- */
+.bor { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.bor + .bor { margin-top: 14px; }
+.bor .bh { display: flex; align-items: center; gap: 14px; padding: 14px 16px; background: var(--panel); flex-wrap: wrap; }
+.bor .bh .m { font-size: 26px; font-weight: 300; color: var(--acc2); }
+.bor .bh .res { margin-left: auto; text-align: right; }
+.bor table td { padding: 8px 16px; }
+.bor tr.g td { color: var(--dim); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; padding-top: 14px; }
+.bor td.cas { color: var(--acc); width: 70px; font-variant-numeric: tabular-nums; }
+.bor tr.tot td { color: var(--tx); font-weight: 500; }
+.bor tr.man td { color: var(--dim); font-style: italic; }
+.bor .notas { padding: 12px 16px; border-top: 1px solid var(--line); display: grid; gap: 6px; font-size: 12.5px; color: var(--mut); }
+.copy { opacity: 0; color: var(--dim); font-size: 11px; margin-left: 6px; }
+tr:hover .copy { opacity: 1; }
+@media print {
+  body { background: #fff; color: #000; }
+  .top, .actions, .noprint { display: none !important; }
+  dialog { position: static; border: 0; width: auto; background: #fff; color: #000; }
+  dialog::backdrop { display: none; }
+  .bor .bh { background: #f2f2f2; }
+  .bor .bh .m, .bor td.cas { color: #000; }
+}
+</style>
+</head>
+<body data-modo="cliente" data-token="">
+
+<header class="top">
+  <div class="brand">CONTA<b>BLE</b></div>
+  <div class="picker asesor-only">
+    <button class="pill" id="pickerBtn" aria-haspopup="listbox"><span class="dot" id="pickerDot"></span><span class="name" id="pickerName">Elegir cliente</span><span aria-hidden="true" style="color:var(--mut)">▾</span></button>
+    <div class="menu" id="menu" role="listbox">
+      <input id="menuSearch" placeholder="Buscar cliente o NIF…" autocomplete="off">
+      <div id="menuList"></div>
+      <div class="item new" id="menuNew">＋ Nuevo cliente</div>
+    </div>
+  </div>
+  <div class="cliente-only pill" style="cursor:default" id="clienteTop"><span class="dot" id="clienteDot"></span><span class="name" id="clienteNombreTop"></span></div>
+  <select class="pill" id="yearSel" aria-label="Año"></select>
+  <div class="spacer"></div>
+  <span class="cliente-only ro">● Solo lectura</span>
+  <button class="btn asesor-only" id="procBtn" title="Leer ahora las facturas nuevas de las carpetas"><span class="spin"></span><span class="hide-sm">Procesar ahora</span><span aria-hidden="true">↻</span></button>
+  <button class="btn icon asesor-only" id="setBtn" title="Ajustes">⚙</button>
+</header>
+
+<main id="app"></main>
+<div class="tip" id="tip"></div>
+<div class="toast" id="toast"></div>
+
+<!-- Alta / ficha de cliente -->
+<dialog id="dlgCliente">
+  <form method="dialog" id="fCliente">
+    <h2 id="fClienteTit">Nuevo cliente</h2>
+    <label>Nombre o razón social<input name="nombre" required placeholder="Café Lumbre"></label>
+    <div class="row2">
+      <label>NIF / CIF<input name="nif" required placeholder="B12345678"></label>
+      <label>Email del cliente<input name="email" type="email" placeholder="hola@negocio.es"></label>
+    </div>
+    <div class="row2">
+      <label>Forma jurídica
+        <select name="forma">
+          <option value="autonomo_eds">Autónomo · ED simplificada</option>
+          <option value="autonomo_edn">Autónomo · ED normal</option>
+          <option value="autonomo_modulos">Autónomo · Módulos</option>
+          <option value="sociedad">Sociedad</option>
+        </select>
+      </label>
+      <label>Régimen de IVA
+        <select name="regimenIva">
+          <option value="general">Régimen general</option>
+          <option value="caja">Criterio de caja</option>
+          <option value="recargo">Recargo de equivalencia</option>
+          <option value="exento">Exento de IVA</option>
+        </select>
+      </label>
+    </div>
+    <div class="row2">
+      <label>Tipo de actividad (IRPF)
+        <select name="tipoActividad">
+          <option value="empresarial">Empresarial</option>
+          <option value="profesional">Profesional (factura con retención)</option>
+        </select>
+      </label>
+      <label>Rendimiento neto del año anterior<input name="rendimientoAnterior" type="number" step="0.01" placeholder="Para la casilla 13 del 130"></label>
+    </div>
+    <label>Actividad<input name="actividad" placeholder="Cafetería, hostelería"></label>
+    <div class="toggle" id="fClienteEnviarFila"><span>Enviarle ya la invitación por correo (carpetas + dashboard)</span><input type="checkbox" name="enviarInvitacion"></div>
+    <div><div class="lbl" style="margin-bottom:8px">Color</div><div class="swatches" id="swatches"></div></div>
+    <p class="note" id="fClienteNota" style="margin:0">Se crearán en tu Drive dos carpetas, <b>COMPRAS</b> y <b>VENTAS</b> (con <b>Tickets TPV</b> dentro), compartidas con el email del cliente sin avisos sueltos de Google. Cuando quieras, le envías un único correo con todo desde «Compartir». Tu carpeta de contabilidad es privada.</p>
+    <div class="actions">
+      <button class="btn" value="cancel" formnovalidate>Cancelar</button>
+      <button class="btn primary" id="fClienteOk" value="ok"><span class="spin"></span><span id="fClienteOkTxt">Crear cliente</span></button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Ajustes -->
+<dialog id="dlgAjustes">
+  <form method="dialog" id="fAjustes">
+    <h2>Ajustes</h2>
+    <label>API key de Claude <span id="keyState" style="text-transform:none;letter-spacing:0;color:var(--dim)"></span><input name="apiKey" type="password" placeholder="sk-ant-…" autocomplete="off"></label>
+    <label>Nombre de tu asesoría (aparece en los correos a clientes)<input name="nombreAsesoria" placeholder="Asesoría Nacho"></label>
+    <label>URL pública de la web app (clientes y HARVI)<input name="publicUrl" placeholder="https://script.google.com/macros/s/…/exec"></label>
+    <label>Página del dashboard del cliente (GitHub Pages)<input name="clientUrl" placeholder="https://tuusuario.github.io/contable/"></label>
+    <div class="toggle"><span>Revisar carpetas automáticamente cada 15 min</span><input type="checkbox" name="trigger"></div>
+    <div class="toggle"><span>Releer con Opus las facturas que Haiku lea con dudas</span><input type="checkbox" name="escalarOpus"></div>
+    <div>
+      <div class="toggle"><span>Token de conexión con HARVI</span><button class="btn sm" type="button" id="tokBtn">Generar</button></div>
+      <div class="note" id="tokInfo"></div>
+    </div>
+    <div class="note" id="setInfo"></div>
+    <div class="actions">
+      <button class="btn" value="cancel" formnovalidate>Cerrar</button>
+      <button class="btn primary" value="ok">Guardar</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Enlace del dashboard del cliente -->
+<dialog id="dlgEnlace">
+  <div class="body">
+    <h2>Compartir con el cliente</h2>
+    <p class="note" style="margin:0">Le llegará <b>un único correo</b> con sus carpetas <b>COMPRAS</b>, <b>VENTAS</b> y <b>Tickets TPV</b>, el enlace a su <b>dashboard de solo lectura</b> y cómo subir las facturas (también desde el móvil). No verá tus libros ni a otros clientes y no puede cambiar nada.</p>
+    <div class="toggle"><span id="enlaceDestino"></span><button class="btn primary" type="button" id="enlaceEnviar"><span class="spin"></span>Enviar invitación por correo</button></div>
+    <div class="note" id="enlaceInvitado" style="margin:0"></div>
+    <label>Enlace del dashboard (por si prefieres mandarlo tú)<input id="enlaceUrl" readonly></label>
+    <div id="enlaceAviso"></div>
+    <div class="actions">
+      <button class="btn" type="button" id="enlaceRenovar" title="El enlace anterior deja de funcionar">Renovar enlace</button>
+      <button class="btn" type="button" id="enlaceCopiar">Copiar enlace</button>
+      <button class="btn" type="button" onclick="document.getElementById('dlgEnlace').close()">Cerrar</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- Borradores de modelos -->
+<dialog id="dlgBor" class="wide">
+  <div class="body">
+    <div class="head" style="margin:0">
+      <div><h2 id="borTit">Borradores</h2><div class="sub" id="borSub"></div></div>
+      <div class="tabs noprint" id="borTabs"></div>
+    </div>
+    <div id="borBody"></div>
+    <div class="actions">
+      <button class="btn" type="button" onclick="window.print()">Imprimir / PDF</button>
+      <button class="btn primary" type="button" onclick="document.getElementById('dlgBor').close()">Cerrar</button>
+    </div>
+  </div>
+</dialog>
+
+<script>window.CONTABLE_API = 'https://script.google.com/macros/s/AKfycbxSVZ19i5hY9l-4AzCOgSECuQ-KSHfStyD6cfEhvEsPSNVR3YqL8sBAs0oS8aJwUm9c/exec';</script>
+<script>
+/* =========================================================================
+   Modo (asesor / cliente) y llamadas al servidor
+   ========================================================================= */
+// Página del cliente alojada fuera de Google (GitHub Pages): window.CONTABLE_API apunta a la web app
+// pública y el token llega tras «#» en la dirección. Dentro de Apps Script, el modo lo pone la plantilla.
+const EXTERNA = !!window.CONTABLE_API;
+const MODO = EXTERNA || document.body.dataset.modo === 'cliente' ? 'cliente' : 'asesor';
+const TOKEN = EXTERNA ? decodeURIComponent(location.hash.slice(1)) : (MODO === 'cliente' ? document.body.dataset.token : '');
+if (EXTERNA) addEventListener('hashchange', () => location.reload());
+document.querySelectorAll(MODO === 'cliente' ? '.asesor-only' : '.cliente-only').forEach(el => el.remove());
+
+const IS_GAS = typeof google !== 'undefined' && google.script && google.script.run;
+async function apiExterna(fn, args) {
+  if (fn !== 'apiDashboardCliente') throw new Error('No disponible');
+  if (!args[0]) throw new Error('Falta tu código de acceso: abre el enlace completo que te enviamos por correo.');
+  const url = window.CONTABLE_API + '?api=cliente&acceso=' + encodeURIComponent(args[0]) + '&year=' + encodeURIComponent(args[1] || '');
+  const r = await fetch(url, { credentials: 'omit' });
+  const j = await r.json();
+  if (!j.ok) throw new Error(j.error || 'No se pudo cargar');
+  return j.datos;
+}
+function api(fn, ...args) {
+  if (EXTERNA) return apiExterna(fn, args);
+  if (!IS_GAS) return Promise.resolve(window.__DEMO__ ? window.__DEMO__.handle(fn, args) : null);
+  return new Promise((res, rej) => google.script.run.withSuccessHandler(res).withFailureHandler(rej)[fn](...args));
+}
+const store = {
+  get(k) { try { return localStorage.getItem('contable.' + k); } catch (e) { return null; } },
+  set(k, v) { try { localStorage.setItem('contable.' + k, v); } catch (e) {} },
+};
+
+const S = { clientes: [], id: null, year: new Date().getFullYear(), d: null, topTab: 'clientes', editId: null };
+const $ = s => document.querySelector(s);
+const MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+const MESES_L = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+const COLORES = ['#c9a96e','#6f93c9','#a48fd8','#5fb98a','#d98f6f','#7fb8c4','#c97f9b','#b5b5a0'];
+const CAT = {
+  mercaderias: 'Mercaderías', materias_primas: 'Materias primas', suministros: 'Suministros', alquiler: 'Alquiler',
+  servicios_profesionales: 'Serv. profesionales', reparaciones_mantenimiento: 'Reparaciones', transporte: 'Transporte',
+  seguros: 'Seguros', publicidad: 'Publicidad', telefonia_internet: 'Teléfono e internet', software_suscripciones: 'Software',
+  material_oficina: 'Material oficina', combustible_vehiculos: 'Combustible', dietas_viajes: 'Viajes y dietas',
+  formacion: 'Formación', comisiones_bancarias: 'Banco', tributos: 'Tributos', inmovilizado: 'Inmovilizado', otros_gastos: 'Otros',
+};
+const AREA = { compras: 'Compras', ventas: 'Ventas', tpv: 'Ticket TPV', modelos: 'Modelos' };
+const ESTADO = { ingresar: 'a ingresar', compensar: 'a compensar', devolver: 'a devolver', cero: 'sin cuota', negativo: 'negativo', informativa: 'informativa' };
+
+const fmt0 = new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
+const fmt2 = new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const nf2 = new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const eur = n => fmt0.format(Math.round(n || 0));
+const eur2 = n => fmt2.format(n || 0);
+const kEur = n => Math.abs(n) >= 1000 ? (n / 1000).toLocaleString('es-ES', { maximumFractionDigits: 1 }) + ' k€' : Math.round(n) + ' €';
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const iniciales = n => String(n || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+function fechaCorta(iso) { if (!iso) return ''; const [, m, d] = iso.split('-').map(Number); return d + ' ' + MESES[m - 1].toLowerCase(); }
+function diasHasta(iso, hoy) { return Math.round((Date.parse(iso) - Date.parse(hoy)) / 86400000); }
+function cuando(iso, hoy) {
+  const n = diasHasta(iso, hoy);
+  if (n < 0) return 'plazo cerrado';
+  if (n === 0) return 'hoy';
+  if (n === 1) return 'mañana';
+  return 'en ' + n + ' días';
+}
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 4200); }
+function busy(btn, on) { btn.classList.toggle('busy', on); btn.disabled = on; }
+function copiar(txt) { try { navigator.clipboard.writeText(txt); toast('Copiado'); } catch (e) { toast(txt); } }
+
+/* =========================================================================
+   Arranque
+   ========================================================================= */
+async function init() {
+  skeleton();
+  if (MODO === 'cliente') return cargar();
+  try { S.clientes = (await api('apiListarClientes')) || []; } catch (e) { return fail(e); }
+  pintarMenu();
+  if (!S.clientes.length) return vacio();
+  const ultimo = store.get('cliente');
+  seleccionar(S.clientes.some(c => c.id === ultimo) ? ultimo : S.clientes[0].id);
+}
+
+async function cargar() {
+  skeleton();
+  try {
+    S.d = MODO === 'cliente' ? await api('apiDashboardCliente', TOKEN, S.year) : await api('apiDashboard', S.id, S.year);
+    render();
+  } catch (e) { fail(e); }
+}
+
+function seleccionar(id, year) {
+  S.id = id; store.set('cliente', id);
+  if (year) S.year = year;
+  const c = S.clientes.find(x => x.id === id);
+  $('#pickerName').textContent = c ? c.nombre : 'Elegir cliente';
+  $('#pickerDot').style.background = c ? c.color : '';
+  $('#menu').classList.remove('open');
+  return cargar();
+}
+
+function fail(e) {
+  $('#app').innerHTML = `<div class="card empty"><h2>No se pudo cargar</h2><p>${esc(e && e.message || e)}</p><button class="btn" onclick="init()">Reintentar</button></div>`;
+}
+
+function skeleton() {
+  $('#app').innerHTML = `<div class="skel" style="height:54px;margin-bottom:24px;width:40%"></div>
+  <div class="grid g-hero"><div class="skel" style="height:230px"></div><div class="skel" style="height:230px"></div></div>
+  <div class="grid g-kpi" style="margin-top:14px">${'<div class="skel" style="height:124px"></div>'.repeat(4)}</div>
+  <div class="skel" style="height:300px;margin-top:14px"></div>`;
+}
+
+function vacio() {
+  $('#app').innerHTML = `<div class="card empty">
+    <div class="lbl" style="color:var(--acc);margin-bottom:16px">Bienvenido</div>
+    <h2>Tu primer cliente</h2>
+    <p>Da de alta un negocio y CONTABLE creará sus carpetas de compras y ventas en Drive. Tu cliente solo tiene que dejar ahí sus facturas: el resto aparece aquí solo.</p>
+    <button class="btn primary" onclick="abrirFicha()">＋ Nuevo cliente</button></div>`;
+}
+
+/* =========================================================================
+   Selector de clientes (asesor)
+   ========================================================================= */
+function pintarMenu(filtro) {
+  if (MODO === 'cliente') return;
+  const f = (filtro || '').toLowerCase();
+  const lista = S.clientes.filter(c => !f || c.nombre.toLowerCase().includes(f) || String(c.nif).toLowerCase().includes(f));
+  $('#menuList').innerHTML = lista.map(c => `<div class="item ${c.id === S.id ? 'sel' : ''}" data-id="${esc(c.id)}" role="option">
+      <span class="dot" style="background:${esc(c.color)}"></span><div><div>${esc(c.nombre)}</div><small>${esc(c.nif)}${c.actividad ? ' · ' + esc(c.actividad) : ''}</small></div></div>`).join('')
+    || '<div class="item" style="cursor:default;color:var(--dim)">Sin resultados</div>';
+}
+if (MODO === 'asesor') {
+  $('#pickerBtn').onclick = e => { e.stopPropagation(); const m = $('#menu'); m.classList.toggle('open'); if (m.classList.contains('open')) { $('#menuSearch').value = ''; pintarMenu(); $('#menuSearch').focus(); } };
+  $('#menuSearch').oninput = e => pintarMenu(e.target.value);
+  $('#menuSearch').onkeydown = e => { if (e.key === 'Enter') { const first = $('#menuList .item[data-id]'); if (first) seleccionar(first.dataset.id); } };
+  $('#menuList').onclick = e => { const it = e.target.closest('.item[data-id]'); if (it) seleccionar(it.dataset.id); };
+  $('#menuNew').onclick = () => { $('#menu').classList.remove('open'); abrirFicha(); };
+  document.addEventListener('click', e => { if (!e.target.closest('.picker')) $('#menu').classList.remove('open'); });
+}
+$('#yearSel').onchange = e => { S.year = Number(e.target.value); cargar(); };
+
+/* =========================================================================
+   Dashboard
+   ========================================================================= */
+function render() {
+  const d = S.d, c = d.cliente, r = d.resumen, cli = MODO === 'cliente';
+  document.documentElement.style.setProperty('--accent', c.color || '#c9a96e');
+  document.title = cli ? c.nombre + ' · CONTABLE' : 'CONTABLE';
+  if (cli) { $('#clienteNombreTop').textContent = c.nombre; $('#clienteDot').style.background = c.color; }
+  $('#yearSel').innerHTML = d.anios.map(y => `<option ${y === d.year ? 'selected' : ''}>${y}</option>`).join('');
+  const tc = d.trimestres[d.tEnCurso - 1];
+  const tl = d.trimestres[d.tLiquidar - 1];
+  const p = d.procesados;
+  const pctFact = r.ingresos > 0 ? Math.max(0, r.ingresosFacturas / r.ingresos * 100) : 0;
+  const pctTpv = r.ingresos > 0 ? Math.max(0, r.ingresosTpv / r.ingresos * 100) : 0;
+  const margen = r.ingresos > 0 ? Math.round(r.rendimiento / r.ingresos * 100) : 0;
+  const venceT = tl.vencimiento;
+  const pendientes = r.revisar + p.error;
+
+  const kpiImpuesto = (titulo, modelo, aplica, importe, estado, notaNo) => `
+    <div class="card">
+      <h3>${titulo} · ${modelo} · ${d.tLiquidar}T</h3>
+      ${aplica ? `<div class="kpi-num num">${eur(Math.abs(importe))}</div>
+        <div class="sub">${cli ? 'previsto · ' : ''}${ESTADO[estado] || ''}</div>
+        <div class="due"><span class="chip ${diasHasta(venceT, d.hoy) <= 7 && diasHasta(venceT, d.hoy) >= 0 ? 'warn' : ''}">${fechaCorta(venceT)} · ${cuando(venceT, d.hoy)}</span></div>`
+      : `<div class="na">${notaNo}</div>`}
+    </div>`;
+  const m303 = tl.m303, m130 = tl.m130;
+  const kpi3 = kpiImpuesto('IVA', '303', d.aplica.iva, m303.liquidacion, m303.estado, 'No presenta 303 (' + esc((c.regimenTxt || '').toLowerCase()) + ').');
+  const kpi4 = d.aplica.irpf130
+    ? kpiImpuesto('IRPF', '130', true, m130.aIngresar, m130.aIngresar > 0 ? 'ingresar' : 'cero')
+    : d.aplica.retenciones
+      ? kpiImpuesto('Retenciones', '111 · 115', true, tl.m111.retenciones + tl.m115.retenciones, 'ingresar')
+      : `<div class="card"><h3>Retenciones soportadas</h3><div class="kpi-num num">${eur(d.trimestres.reduce((s, q) => s + q.retencionesSoportadas, 0))}</div><div class="sub">en facturas emitidas · ${d.year}</div></div>`;
+
+  $('#app').innerHTML = `
+  <div class="client">
+    <div class="avatar">${esc(iniciales(c.nombre))}</div>
+    <div>
+      <h1>${esc(c.nombre)}</h1>
+      <div class="meta">${esc(c.nif)} · ${esc(c.formaTxt)} · ${esc(c.regimenTxt)}${c.actividad ? ' · ' + esc(c.actividad) : ''}</div>
+    </div>
+    <div class="chips">
+      <span class="chip">${r.documentos} documentos</span>
+      ${pendientes ? `<span class="chip warn">${pendientes} por revisar</span>` : `<span class="chip good">✓ Al día</span>`}
+      ${p.ultimo ? `<span class="chip">Actualizado ${fechaCorta(p.ultimo)}</span>` : ''}
+      ${d.cerrado ? `<span class="chip">Ejercicio ${d.year} cerrado</span>` : ''}
+      ${cli ? '' : `<button class="btn sm" id="fichaBtn">Ficha</button><button class="btn sm" id="enlaceBtn">Compartir con el cliente</button><button class="btn sm primary" id="borBtn">Borradores ${d.tLiquidar}T</button>`}
+    </div>
+  </div>
+
+  <section class="grid g-hero" style="margin-top:0">
+    <div class="card">
+      <h3>Facturación ${d.year}</h3>
+      <div class="hero-num num">${eur(r.ingresos)}</div>
+      <div class="sub">Base imponible sin IVA · margen ${margen} %</div>
+      ${d.aplica.tpv ? `<div class="split"><i style="width:${pctFact}%;background:var(--s1)"></i><i style="width:${pctTpv}%;background:var(--s3)"></i></div>
+      <div class="legend"><span><b style="background:var(--s1)"></b>Facturas ${eur(r.ingresosFacturas)}</span><span><b style="background:var(--s3)"></b>Tickets TPV ${eur(r.ingresosTpv)}</span></div>` : ''}
+      <div class="chart" id="spark" style="margin-top:16px"></div>
+    </div>
+    <div class="card">
+      <h3>Trimestre en curso · ${d.tEnCurso}T</h3>
+      <div class="kpi-num num" style="font-size:34px">${eur(tc.ingresos)}</div>
+      <div class="sub">Facturación del trimestre${d.aplica.irpf130 ? ' · base del 130' : ''}</div>
+      <div class="chart" id="quarters" style="margin-top:8px"></div>
+    </div>
+  </section>
+
+  <section class="grid g-kpi">
+    <div class="card"><h3>Gastos ${d.year}</h3><div class="kpi-num num">${eur(r.gastos)}</div>
+      <div class="sub">${r.inversiones ? 'Más ' + eur(r.inversiones) + ' en inversiones' : 'Base deducible sin IVA'}</div></div>
+    <div class="card"><h3>Rendimiento neto</h3><div class="kpi-num num" style="color:${r.rendimiento < 0 ? 'var(--err)' : 'inherit'}">${eur(r.rendimiento)}</div>
+      <div class="sub">Ingresos − gastos · ${d.year}</div></div>
+    ${kpi3}
+    ${kpi4}
+  </section>
+
+  <section class="card">
+    <div class="head"><div><h3>Ingresos y gastos por mes</h3><div class="sub">Base imponible · ${d.year}</div></div>
+      <div class="legend"><span><b style="background:var(--s1)"></b>Ingresos</span><span><b style="background:var(--s2)"></b>Gastos</span></div></div>
+    <div class="chart" id="monthly"></div>
+  </section>
+
+  <section class="grid g-2">
+    <div class="card"><div class="head"><div><h3>Gastos por categoría</h3><div class="sub">${d.year}</div></div></div><div id="cats"></div></div>
+    <div class="card"><div class="head"><div><h3>Principales</h3><div class="sub">por importe · ${d.year}</div></div>
+      <div class="tabs" id="topTabs"><button data-t="clientes" class="${S.topTab === 'clientes' ? 'on' : ''}">Clientes</button><button data-t="proveedores" class="${S.topTab === 'proveedores' ? 'on' : ''}">Proveedores</button></div></div>
+      <div id="tops"></div></div>
+  </section>
+
+  <div class="sec-title">${cli ? 'Tus próximos impuestos' : 'Modelos y calendario fiscal'}</div>
+  <div class="cal" id="cal"></div>
+  ${cli ? `<p class="note">Importes estimados por tu asesor con las facturas recibidas hasta hoy. Pueden cambiar si llegan más facturas antes del cierre.</p>` : `
+  <section class="card"><div class="tablewrap" id="modelos"></div>
+    <p class="note">Estimaciones a partir de las facturas leídas; revisa antes de presentar. Pulsa «Borradores» para ver cada modelo casilla a casilla.<br>
+    Normas aplicadas a ${d.year}: difícil justificación ${esc(d.normas.dificilJustificacion)} · pago fraccionado ${esc(d.normas.pagoFraccionado130)} · umbral 347 ${esc(d.normas.umbral347)}.</p></section>
+  ${d.anual.m347.length ? `<section class="card"><div class="head"><div><h3>Modelo 347 · terceros por encima de 3.005,06 €</h3><div class="sub">IVA incluido · se presenta en febrero</div></div></div><div class="tablewrap" id="t347"></div></section>` : ''}`}
+
+  <div class="sec-title">${cli ? 'Tus documentos' : 'Documentos'}</div>
+  <section class="grid ${cli ? 'g-2' : 'g-3'}" style="margin-top:0">
+    ${cli ? '' : `<div class="card"><div class="head"><div><h3>Libros Excel ${d.year}</h3><div class="sub">Se actualizan solos al llegar facturas</div></div>
+      <button class="btn sm" id="recalc" title="Recalcular el libro de Modelos">↻ Modelos</button></div><div class="books" id="books"></div></div>`}
+    <div class="card"><div class="head"><div><h3>${cli ? 'Dónde subir tus facturas' : 'Carpetas compartidas'}</h3><div class="sub">${cli ? 'Arrastra cada factura a su carpeta' : (c.email ? 'Con ' + esc(c.email) : 'Sin email: compártelas tú')}</div></div></div><div id="folders"></div></div>
+    ${cli ? `<div class="card"><div class="head"><div><h3>Documentos con incidencias</h3><div class="sub">Si puedes, sube una versión más clara</div></div></div><div id="rev"></div></div>` : ''}
+  </section>
+  ${cli ? '' : `<section class="card"><div class="head"><div><h3>Pendiente de revisar</h3><div class="sub">Documentos dudosos o con error de lectura</div></div>
+    ${p.error ? '<button class="btn sm" id="retry"><span class="spin"></span>Reintentar errores</button>' : ''}</div><div id="rev"></div></section>`}
+  `;
+
+  pintarSpark(d);
+  pintarTrimestres(d);
+  pintarMensual(d);
+  pintarCategorias(d);
+  pintarTops(d);
+  pintarCalendario(d);
+  if (!cli) { pintarModelos(d); if (d.anual.m347.length) pintar347(d); }
+  pintarDocumentos(d);
+
+  document.querySelectorAll('#topTabs button').forEach(b => b.onclick = () => { S.topTab = b.dataset.t; document.querySelectorAll('#topTabs button').forEach(x => x.classList.toggle('on', x === b)); pintarTops(d); });
+  if (!cli) {
+    $('#recalc').onclick = async e => { busy(e.currentTarget, true); try { await api('apiRecalcularModelos', S.id, S.year); toast('Libro de modelos actualizado'); cargar(); } catch (err) { toast(err.message || err); busy(e.currentTarget, false); } };
+    if ($('#retry')) $('#retry').onclick = async e => { busy(e.currentTarget, true); try { const r2 = await api('apiReintentar', S.id); toast(resumenProc(r2)); cargar(); } catch (err) { toast(err.message || err); busy(e.currentTarget, false); } };
+    $('#borBtn').onclick = () => abrirBorradores(d.tLiquidar);
+    $('#enlaceBtn').onclick = () => abrirEnlace(false);
+    $('#fichaBtn').onclick = () => abrirFicha(S.clientes.find(x => x.id === S.id));
+  }
+}
+
+/* =========================================================================
+   Gráficos (SVG propio, sin librerías)
+   ========================================================================= */
+const tip = $('#tip');
+function showTip(html, ev) {
+  tip.innerHTML = html; tip.style.opacity = 1;
+  const w = tip.offsetWidth, h = tip.offsetHeight;
+  let x = ev.clientX + 14, y = ev.clientY - h - 12;
+  if (x + w > innerWidth - 8) x = ev.clientX - w - 14;
+  if (y < 8) y = ev.clientY + 16;
+  tip.style.left = x + 'px'; tip.style.top = y + 'px';
+}
+function hideTip() { tip.style.opacity = 0; }
+const tipRow = (color, label, val) => `<div class="r"><span><i class="k" style="background:${color}"></i>${label}</span><b>${val}</b></div>`;
+function niceMax(v) { if (v <= 0) return 1; const p = Math.pow(10, Math.floor(Math.log10(v))); const n = v / p; return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * p; }
+function barPath(x, y, w, h, r) {
+  if (h <= 0.5) return '';
+  r = Math.min(r, w / 2, h);
+  return `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z`;
+}
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+function pintarMensual(d) {
+  const el = $('#monthly'); const W = el.clientWidth, H = 260, m = { t: 10, r: 4, b: 26, l: 50 };
+  const iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const ing = d.mensual.map(x => Math.max(0, x.ventas + x.tpv)), gas = d.mensual.map(x => Math.max(0, x.gastos));
+  const max = niceMax(Math.max(...ing, ...gas));
+  const band = iw / 12, gw = Math.min(band * 0.66, 40), bw = (gw - 2) / 2;
+  let s = `<svg width="${W}" height="${H}">`;
+  for (let i = 0; i <= 4; i++) {
+    const y = m.t + ih - ih * i / 4;
+    s += `<line x1="${m.l}" x2="${W - m.r}" y1="${y}" y2="${y}" stroke="${i ? css('--line') : css('--line2')}" stroke-width="1"/>`;
+    s += `<text x="${m.l - 8}" y="${y + 4}" text-anchor="end">${kEur(max * i / 4)}</text>`;
+  }
+  d.mensual.forEach((x, i) => {
+    const x0 = m.l + band * i + (band - gw) / 2;
+    const h1 = ing[i] / max * ih, h2 = gas[i] / max * ih;
+    s += `<rect class="hl" data-i="${i}" x="${m.l + band * i}" y="${m.t}" width="${band}" height="${ih}" fill="transparent" rx="6"/>`;
+    s += `<path d="${barPath(x0, m.t + ih - h1, bw, h1, 4)}" fill="var(--s1)" pointer-events="none"/>`;
+    s += `<path d="${barPath(x0 + bw + 2, m.t + ih - h2, bw, h2, 4)}" fill="var(--s2)" pointer-events="none"/>`;
+    s += `<text x="${m.l + band * i + band / 2}" y="${H - 8}" text-anchor="middle">${W < 520 ? MESES[i][0] : MESES[i]}</text>`;
+  });
+  el.innerHTML = s + '</svg>';
+  el.querySelectorAll('.hl').forEach(rc => {
+    rc.onmousemove = ev => {
+      el.querySelectorAll('.hl').forEach(o => o.setAttribute('fill', 'transparent'));
+      rc.setAttribute('fill', css('--panel'));
+      const x = d.mensual[+rc.dataset.i];
+      showTip(`<div class="t">${MESES_L[x.mes - 1]} ${d.year}</div>
+        ${tipRow('var(--s1)', 'Ingresos', eur2(x.ventas + x.tpv))}
+        ${x.tpv ? `<div class="r" style="padding-left:14px"><span>· de ellos TPV</span><span>${eur2(x.tpv)}</span></div>` : ''}
+        ${tipRow('var(--s2)', 'Gastos', eur2(x.gastos))}
+        <div class="r" style="border-top:1px solid var(--line);margin-top:5px;padding-top:5px"><span>Resultado</span><b>${eur2(x.ventas + x.tpv - x.gastos)}</b></div>`, ev);
+    };
+    rc.onmouseleave = () => { rc.setAttribute('fill', 'transparent'); hideTip(); };
+  });
+}
+
+function pintarSpark(d) {
+  const el = $('#spark'); const W = el.clientWidth, H = 64;
+  const v = d.mensual.map(x => x.ventas + x.tpv);
+  const ultimo = d.year === Number(d.hoy.slice(0, 4)) ? Number(d.hoy.slice(5, 7)) : 12;
+  const pts = v.slice(0, ultimo);
+  const max = Math.max(...pts, 1);
+  const X = i => (pts.length > 1 ? i / (pts.length - 1) : 0.5) * (W - 4) + 2;
+  const Y = n => H - 4 - Math.max(0, n) / max * (H - 10);
+  const line = pts.map((n, i) => `${i ? 'L' : 'M'}${X(i).toFixed(1)},${Y(n).toFixed(1)}`).join('');
+  el.innerHTML = `<svg width="${W}" height="${H}">
+    <defs><linearGradient id="gS" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c9a96e" stop-opacity=".22"/><stop offset="1" stop-color="#c9a96e" stop-opacity="0"/></linearGradient></defs>
+    <path d="${line}L${X(pts.length - 1)},${H}L${X(0)},${H}Z" fill="url(#gS)"/>
+    <path d="${line}" fill="none" stroke="var(--s1)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+    <line id="sx" y1="0" y2="${H}" stroke="${css('--line2')}" opacity="0"/>
+    <circle id="sc" r="4" fill="var(--s1)" stroke="${css('--bg2')}" stroke-width="2" opacity="0"/>
+    <rect width="${W}" height="${H}" fill="transparent" id="sh"/></svg>`;
+  const sh = el.querySelector('#sh');
+  sh.onmousemove = ev => {
+    const bx = el.getBoundingClientRect();
+    const i = Math.max(0, Math.min(pts.length - 1, Math.round((ev.clientX - bx.left - 2) / (W - 4) * (pts.length - 1))));
+    const sx = el.querySelector('#sx'); sx.setAttribute('x1', X(i)); sx.setAttribute('x2', X(i)); sx.setAttribute('opacity', 1);
+    const c = el.querySelector('#sc'); c.setAttribute('cx', X(i)); c.setAttribute('cy', Y(pts[i])); c.setAttribute('opacity', 1);
+    showTip(`<div class="t">${MESES_L[i]}</div>${tipRow('var(--s1)', 'Facturación', eur2(pts[i]))}`, ev);
+  };
+  sh.onmouseleave = () => { el.querySelector('#sx').setAttribute('opacity', 0); el.querySelector('#sc').setAttribute('opacity', 0); hideTip(); };
+}
+
+function pintarTrimestres(d) {
+  const el = $('#quarters'); const W = el.clientWidth, H = 140, top = 22, base = H - 22;
+  const v = d.trimestres.map(q => Math.max(0, q.ingresos));
+  const max = Math.max(...v, 1);
+  const band = W / 4, bw = Math.min(band * 0.5, 56);
+  let s = `<svg width="${W}" height="${H}"><line x1="0" x2="${W}" y1="${base}" y2="${base}" stroke="${css('--line2')}"/>`;
+  d.trimestres.forEach((q, i) => {
+    const h = v[i] / max * (base - top), x = band * i + (band - bw) / 2;
+    const cur = q.t === d.tEnCurso, fut = q.t > d.tEnCurso;
+    s += `<rect class="hq" data-i="${i}" x="${band * i}" y="0" width="${band}" height="${H}" fill="transparent"/>`;
+    s += `<path d="${barPath(x, base - h, bw, h, 4)}" fill="${cur ? 'var(--s1)' : css('--acc-soft')}" pointer-events="none"/>`;
+    if (!fut || v[i]) s += `<text x="${x + bw / 2}" y="${base - h - 7}" text-anchor="middle" style="fill:${cur ? css('--tx') : css('--dim')}">${kEur(v[i])}</text>`;
+    s += `<text x="${x + bw / 2}" y="${H - 4}" text-anchor="middle" style="${cur ? 'fill:' + css('--acc') : ''}">${q.t}T</text>`;
+  });
+  el.innerHTML = s + '</svg>';
+  el.querySelectorAll('.hq').forEach(rc => {
+    rc.onmousemove = ev => { const q = d.trimestres[+rc.dataset.i];
+      showTip(`<div class="t">${q.t}º trimestre ${d.year}</div>${tipRow('var(--s1)', 'Facturas', eur2(q.ingresosFacturas))}${q.ingresosTpv ? tipRow('var(--s3)', 'Tickets TPV', eur2(q.ingresosTpv)) : ''}${tipRow('var(--s2)', 'Gastos', eur2(q.gastos))}`, ev); };
+    rc.onmouseleave = hideTip;
+  });
+}
+
+function hbars(items, color) {
+  if (!items.length) return '<div class="na">Aún no hay datos.</div>';
+  const max = Math.max(...items.map(x => x.v), 1);
+  return items.map(x => `<div class="hb" title="${esc(x.l)}: ${eur2(x.v)}">
+    <span class="l">${esc(x.l)}</span><span class="track"><span class="bar" style="width:${Math.max(0, x.v) / max * 100}%;background:${color}"></span></span><span class="v">${eur(x.v)}</span></div>`).join('');
+}
+function pintarCategorias(d) {
+  const top = d.categorias.slice(0, 7);
+  const resto = d.categorias.slice(7).reduce((s, x) => s + x.importe, 0);
+  const items = top.map(x => ({ l: CAT[x.categoria] || x.categoria, v: x.importe }));
+  if (resto) items.push({ l: 'Resto', v: resto });
+  $('#cats').innerHTML = hbars(items, 'var(--s2)');
+}
+function pintarTops(d) {
+  const lista = S.topTab === 'clientes' ? d.topClientes : d.topProveedores;
+  $('#tops').innerHTML = hbars(lista.map(x => ({ l: x.nombre, v: x.importe })), S.topTab === 'clientes' ? 'var(--s1)' : 'var(--s2)');
+}
+
+/* =========================================================================
+   Modelos y calendario
+   ========================================================================= */
+function pintarCalendario(d) {
+  const prox = d.vencimientos.filter(v => !v.pasado && (MODO === 'asesor' || v.importe != null)).slice(0, 6);
+  const primera = prox.length ? prox[0].fecha : '';
+  $('#cal').innerHTML = prox.map(v => `<div class="c ${v.fecha === primera ? 'next' : ''}">
+      <div class="n">${esc(v.periodo)} · ${esc(v.nombre)}</div>
+      <div class="mod">${esc(v.modelo)}</div>
+      <div class="n">${fechaCorta(v.fecha)} · ${cuando(v.fecha, d.hoy)}</div>
+      <div class="amt num">${v.importe == null ? '<span class="sub">Informativa</span>' : eur2(Math.abs(v.importe)) + ' <span class="sub">' + (ESTADO[v.estado] || '') + '</span>'}</div>
+    </div>`).join('') || '<div class="na">No hay vencimientos pendientes este año.</div>';
+}
+
+function pintarModelos(d) {
+  const T = d.trimestres;
+  const celda = (v, est, q) => {
+    const cls = q.t === d.tLiquidar ? 'cur' : '';
+    if (q.t > d.tEnCurso && !v) return `<td class="${cls}"><span class="s">—</span></td>`;
+    const lab = { ingresar: ['pay', 'a ingresar'], compensar: ['back', 'a compensar'], devolver: ['back', 'a devolver'], cero: ['', 'sin cuota'] }[est];
+    return `<td class="${cls}">${eur2(Math.abs(v))}${lab ? `<span class="s ${lab[0]}">${lab[1]}</span>` : ''}</td>`;
+  };
+  const filas = [];
+  if (d.aplica.iva) filas.push(['303', 'IVA', q => celda(q.m303.liquidacion, q.m303.estado, q), `${eur2(d.anual.m390.resultado)}<span class="s">390</span>`]);
+  if (d.aplica.irpf130) filas.push(['130', 'IRPF', q => celda(q.m130.aIngresar, q.m130.aIngresar > 0 ? 'ingresar' : 'cero', q), `${eur2(T.reduce((s, q) => s + q.m130.aIngresar, 0))}<span class="s">a cuenta</span>`]);
+  filas.push(['111', 'Retenciones prof.', q => celda(q.m111.retenciones, q.m111.retenciones ? 'ingresar' : null, q), `${eur2(d.anual.m190.retenciones)}<span class="s">190 · ${d.anual.m190.perceptores.length} perc.</span>`]);
+  filas.push(['115', 'Alquileres', q => celda(q.m115.retenciones, q.m115.retenciones ? 'ingresar' : null, q), `${eur2(d.anual.m180.retenciones)}<span class="s">180</span>`]);
+  if (d.aplica.intracom) filas.push(['349', 'Intracomunitarias', q => `<td class="${q.t === d.tLiquidar ? 'cur' : ''}">${q.m349.length ? eur2(q.m349.reduce((s, l) => s + l.base, 0)) + `<span class="s">${q.m349.length} operadores</span>` : '<span class="s">—</span>'}</td>`, '']);
+  $('#modelos').innerHTML = `<table>
+    <thead><tr><th>Modelo</th>${T.map(q => `<th class="${q.t === d.tLiquidar ? 'cur' : ''}"><a href="#" data-bor="${q.t}" style="color:inherit">${q.t}T${q.t === d.tLiquidar ? ' · ahora' : ''}</a></th>`).join('')}<th>Anual</th></tr></thead>
+    <tbody>${filas.map(f => `<tr><td><span style="color:var(--acc2)">${f[0]}</span> <span class="sub">${f[1]}</span></td>${T.map(f[2]).join('')}<td>${f[3]}</td></tr>`).join('')}</tbody></table>`;
+  $('#modelos').querySelectorAll('[data-bor]').forEach(a => a.onclick = e => { e.preventDefault(); abrirBorradores(+a.dataset.bor); });
+}
+
+function pintar347(d) {
+  $('#t347').innerHTML = `<table><thead><tr><th>Clave</th><th style="text-align:left">Tercero</th><th>1T</th><th>2T</th><th>3T</th><th>4T</th><th>Total</th></tr></thead>
+    <tbody>${d.anual.m347.map(l => `<tr><td>${l.clave} · ${l.clave === 'A' ? 'Compras' : 'Ventas'}</td><td style="text-align:left">${esc(l.nombre)} <span class="sub">${esc(l.nif)}</span></td>${l.trimestres.map(v => `<td>${v ? eur2(v) : '<span class="s">—</span>'}</td>`).join('')}<td>${eur2(l.total)}</td></tr>`).join('')}</tbody></table>`;
+}
+
+/* =========================================================================
+   Documentos
+   ========================================================================= */
+const ICON_SHEET = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#c9a96e" stroke-width="1.6"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M4 9h16M4 15h16M10 3v18"/></svg>';
+const ICON_FOLDER = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>';
+
+function pintarDocumentos(d) {
+  const cli = MODO === 'cliente';
+  if (!cli) {
+    $('#books').innerHTML = d.libros.map(l => `<div class="book ${l.url ? '' : 'off'}">
+        <div class="ic">${ICON_SHEET}</div>
+        <div><div>${esc(l.nombre)}</div><div class="sub">${l.url ? (l.filas == null ? '303 · 130 · 111 · 115 · 347 · 349 · Borradores' : l.filas + ' líneas') : 'Se creará con la primera factura'}</div></div>
+        ${l.url ? `<div class="acts"><a class="btn sm" href="${esc(l.url)}" target="_blank" rel="noopener">Abrir</a><a class="btn sm" href="${esc(l.xlsx)}" target="_blank" rel="noopener">Excel</a></div>` : ''}
+      </div>`).join('');
+  }
+  const carpetas = [
+    ['COMPRAS', cli ? 'Facturas de tus proveedores y gastos' : 'Facturas de proveedores y gastos', d.carpetas.compras],
+    ['VENTAS', cli ? 'Las facturas que emites a tus clientes' : 'Facturas emitidas a clientes', d.carpetas.ventas],
+    ['Tickets TPV', 'Dentro de VENTAS · tickets y cierres de caja', d.carpetas.tpv],
+  ];
+  if (!cli && d.carpetas.privada) carpetas.push(['Contabilidad', 'Privada · solo tú', d.carpetas.privada]);
+  $('#folders').innerHTML = carpetas.map(f => `<div class="folder">${ICON_FOLDER}<div class="grow">${esc(f[0])}<small>${esc(f[1])}</small></div>
+      ${cli ? '' : `<button class="btn sm" data-copy="${esc(f[2])}" title="Copiar enlace">⧉</button>`}<a class="btn sm" href="${esc(f[2])}" target="_blank" rel="noopener">Abrir</a></div>`).join('');
+  $('#folders').querySelectorAll('[data-copy]').forEach(b => b.onclick = () => copiar(b.dataset.copy));
+
+  $('#rev').innerHTML = d.revision.length ? d.revision.map(x => `<div class="rev">
+      <span class="chip ${x.error ? 'crit' : 'warn'}">${x.error ? 'Error' : 'Revisar'}</span>
+      <div class="grow"><div>${esc(x.archivo)}</div><div class="sub">${esc(AREA[x.area] || x.area)}${x.tercero ? ' · ' + esc(x.tercero) : ''}${x.total ? ' · ' + eur2(x.total) : ''}</div>
+        <div class="why">${esc(x.motivo)}</div></div>
+      ${x.enlace ? `<a class="btn sm" href="${esc(x.enlace)}" target="_blank" rel="noopener">Ver</a>` : ''}</div>`).join('')
+    : `<div class="na">✓ ${cli ? 'Todo correcto. Gracias.' : 'Nada pendiente. Todas las facturas se han leído con buena confianza.'}</div>`;
+}
+
+/* =========================================================================
+   Borradores de modelos (asesor)
+   ========================================================================= */
+async function abrirBorradores(t) {
+  const dlg = $('#dlgBor');
+  $('#borTabs').innerHTML = [1, 2, 3, 4].map(n => `<button data-t="${n}" class="${n === t ? 'on' : ''}">${n}T</button>`).join('');
+  $('#borTabs').querySelectorAll('button').forEach(b => b.onclick = () => abrirBorradores(+b.dataset.t));
+  $('#borBody').innerHTML = '<div class="skel" style="height:320px"></div>';
+  if (!dlg.open) dlg.showModal();
+  try {
+    const r = await api('apiBorradores', S.id, S.year, t);
+    $('#borTit').textContent = 'Borradores ' + t + 'T ' + r.year;
+    $('#borSub').textContent = r.cliente.nombre + ' · ' + r.cliente.nif + ' · casillas del formulario de la Sede electrónica de la AEAT';
+    $('#borBody').innerHTML = r.borradores.length ? r.borradores.map(pintarBorrador).join('') : '<div class="na">No hay modelos que presentar en este trimestre con los datos actuales.</div>';
+    $('#borBody').querySelectorAll('[data-v]').forEach(el => el.onclick = () => copiar(el.dataset.v));
+  } catch (e) { $('#borBody').innerHTML = `<div class="aviso">${esc(e.message || e)}</div>`; }
+}
+
+function pintarBorrador(b) {
+  const filas = (b.casillas || []).map(c => {
+    if (c.grupo) return `<tr class="g"><td colspan="3">${esc(c.grupo)}</td></tr>`;
+    const v = c.v == null ? (c.manual ? 'completar' : '') : nf2.format(c.v);
+    return `<tr class="${c.total ? 'tot' : ''} ${c.manual ? 'man' : ''}"><td class="cas">${esc(c.c)}</td><td style="text-align:left;white-space:normal">${esc(c.d)}</td>
+      <td>${c.v == null ? esc(v) : `<span data-v="${esc(nf2.format(c.v))}" style="cursor:copy">${esc(v)}</span><span class="copy">copiar</span>`}</td></tr>`;
+  }).join('');
+  const ops = (b.operadores || []).length ? `<table><thead><tr><th>Clave</th><th style="text-align:left">Operador</th><th>Importe</th></tr></thead><tbody>${b.operadores.map(o =>
+    `<tr><td class="cas" style="color:var(--acc)">${esc(o.clave)}</td><td style="text-align:left">${esc(o.nombre)} <span class="sub">${esc(o.nif)}</span></td><td>${nf2.format(o.base)}</td></tr>`).join('')}</tbody></table>` : '';
+  return `<div class="bor">
+    <div class="bh"><span class="m">${esc(b.modelo)}</span><div><div>${esc(b.titulo)}</div><div class="sub">${esc(b.periodo)}${b.plazo ? ' · plazo hasta el ' + fechaCorta(b.plazo) : ''}</div></div>
+      <div class="res">${b.resultado == null ? '<span class="sub">Informativa</span>' : `<div class="num" style="font-size:20px;font-weight:300">${eur2(Math.abs(b.resultado))}</div><div class="sub">${ESTADO[b.estado] || ''}</div>`}</div></div>
+    <table>${filas}</table>${ops}
+    ${b.notas.length ? `<div class="notas">${b.notas.map(n => `<div>• ${esc(n)}</div>`).join('')}</div>` : ''}
+  </div>`;
+}
+
+/* =========================================================================
+   Acciones del asesor
+   ========================================================================= */
+function resumenProc(r) {
+  if (!r) return 'Hecho';
+  if (!r.nuevos) return 'No hay documentos nuevos';
+  return `${r.nuevos} nuevos · ${r.ok} correctos · ${r.revisar} a revisar${r.error ? ' · ' + r.error + ' con error' : ''}${r.quedan ? ' · ' + r.quedan + ' en la próxima pasada' : ''}`;
+}
+
+if (MODO === 'asesor') {
+  $('#procBtn').onclick = async e => {
+    if (!S.id) return;
+    const b = e.currentTarget; busy(b, true);
+    try { const r = await api('apiProcesar', S.id); toast(resumenProc(r)); await cargar(); }
+    catch (err) { toast(err.message || err); }
+    busy(b, false);
+  };
+
+  $('#fCliente').onsubmit = async e => {
+    if (e.submitter && e.submitter.value === 'cancel') return;
+    e.preventDefault();
+    const datos = Object.fromEntries(new FormData(e.target).entries());
+    datos.color = colorNuevo;
+    datos.enviarInvitacion = !!e.target.enviarInvitacion.checked;
+    const b = $('#fClienteOk'); busy(b, true);
+    try {
+      if (S.editId) {
+        await api('apiActualizarCliente', S.editId, datos);
+        $('#dlgCliente').close(); toast('Ficha actualizada');
+        S.clientes = await api('apiListarClientes'); pintarMenu(); seleccionar(S.editId);
+      } else {
+        const c = await api('apiCrearCliente', datos);
+        $('#dlgCliente').close();
+        toast(c.aviso || `${c.nombre} creado${c.email ? (c.invitado ? ' · invitación enviada a ' + c.email : ' · carpetas compartidas con ' + c.email) : ''}`);
+        S.clientes = await api('apiListarClientes'); pintarMenu(); seleccionar(c.id);
+      }
+    } catch (err) { toast(err.message || err); }
+    busy(b, false);
+  };
+
+  $('#setBtn').onclick = async () => { pintarAjustes(await api('apiEstadoAjustes') || {}); $('#dlgAjustes').showModal(); };
+  $('#tokBtn').onclick = async () => pintarAjustes(await api('apiGuardarAjustes', { generarToken: true }) || {});
+  $('#fAjustes').onsubmit = async e => {
+    if (e.submitter && e.submitter.value === 'cancel') return;
+    e.preventDefault();
+    const f = e.target;
+    try {
+      await api('apiGuardarAjustes', { apiKey: f.apiKey.value, trigger: f.trigger.checked, publicUrl: f.publicUrl.value, escalarOpus: f.escalarOpus.checked, nombreAsesoria: f.nombreAsesoria.value, clientUrl: f.clientUrl.value });
+      $('#dlgAjustes').close(); toast('Ajustes guardados');
+    } catch (err) { toast(err.message || err); }
+  };
+  $('#enlaceCopiar').onclick = () => copiar($('#enlaceUrl').value);
+  $('#enlaceEnviar').onclick = async e => {
+    const b = e.currentTarget; busy(b, true);
+    try {
+      const r = await api('apiEnviarInvitacion', S.id);
+      toast('Invitación enviada a ' + r.enviadoA);
+      $('#enlaceInvitado').textContent = 'Última invitación enviada: ' + r.fecha;
+    } catch (err) { toast(err.message || err); }
+    busy(b, false);
+  };
+  $('#enlaceRenovar').onclick = () => { if (confirm('El enlace actual dejará de funcionar. ¿Renovar?')) abrirEnlace(true); };
+}
+
+let colorNuevo = COLORES[0];
+function abrirFicha(c) {
+  S.editId = c ? c.id : null;
+  const f = $('#fCliente');
+  f.reset();
+  colorNuevo = c ? c.color : COLORES[S.clientes.length % COLORES.length];
+  $('#fClienteTit').textContent = c ? 'Ficha de ' + c.nombre : 'Nuevo cliente';
+  $('#fClienteOkTxt').textContent = c ? 'Guardar' : 'Crear cliente';
+  $('#fClienteNota').style.display = c ? 'none' : '';
+  $('#fClienteEnviarFila').style.display = c ? 'none' : '';
+  f.nif.readOnly = !!c;
+  if (c) ['nombre', 'nif', 'email', 'forma', 'regimenIva', 'tipoActividad', 'rendimientoAnterior', 'actividad'].forEach(k => { if (f[k]) f[k].value = c[k] == null ? '' : c[k]; });
+  $('#swatches').innerHTML = COLORES.map(x => `<button type="button" style="background:${x}" data-c="${x}" class="${x === colorNuevo ? 'on' : ''}" aria-label="Color ${x}"></button>`).join('');
+  $('#swatches').onclick = e => { const b = e.target.closest('[data-c]'); if (!b) return; colorNuevo = b.dataset.c; $('#swatches').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); };
+  $('#dlgCliente').showModal();
+}
+
+function pintarAjustes(a) {
+  $('#keyState').textContent = a.tieneApiKey ? '· configurada ✓' : '· sin configurar';
+  $('#fAjustes').trigger.checked = !!a.trigger;
+  $('#fAjustes').escalarOpus.checked = a.escalarOpus !== false;
+  $('#fAjustes').apiKey.value = '';
+  $('#fAjustes').publicUrl.value = a.publicUrl || '';
+  $('#fAjustes').nombreAsesoria.value = a.nombreAsesoria || '';
+  $('#fAjustes').clientUrl.value = a.clientUrl || '';
+  $('#tokInfo').innerHTML = a.harviToken
+    ? `Token: <code>${esc(a.harviToken)}</code><br>Endpoint: <code>${esc(a.publicUrl || a.url || '')}?api=resumen&amp;cliente=ID&amp;year=${S.year}&amp;token=…</code>`
+    : 'Genera un token cuando vayas a conectar HARVI.';
+  $('#setInfo').innerHTML = `Lectura de facturas: <code>${esc(a.modeloLectura || '')}</code> · Dudosas y resto: <code>${esc(a.modelo || '')}</code>${a.raiz ? ` · <a href="${esc(a.raiz)}" target="_blank" rel="noopener">Carpeta CONTABLE en Drive</a>` : ''}`;
+}
+
+async function abrirEnlace(renovar) {
+  try {
+    const r = await api('apiEnlaceCliente', S.id, renovar);
+    $('#enlaceUrl').value = r.url;
+    $('#enlaceDestino').innerHTML = r.email ? 'Para: <b>' + esc(r.email) + '</b>' : '<span style="color:var(--err)">Este cliente no tiene email: añádelo en su Ficha.</span>';
+    $('#enlaceEnviar').disabled = !r.email;
+    $('#enlaceInvitado').textContent = r.invitado ? 'Última invitación enviada: ' + r.invitado : 'Aún no se le ha enviado la invitación.';
+    $('#enlaceAviso').innerHTML = r.publica ? '' : '<div class="aviso">Aún no has indicado la URL pública en ⚙ Ajustes. Este enlace usa la implementación privada y tu cliente no podrá abrirlo hasta que crees la implementación pública (ver README).</div>';
+    if (!$('#dlgEnlace').open) $('#dlgEnlace').showModal();
+    if (renovar) toast('Enlace renovado');
+  } catch (e) { toast(e.message || e); }
+}
+
+let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => S.d && render(), 150); });
+init();
+</script>
+</body>
+</html>
