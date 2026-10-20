@@ -412,7 +412,8 @@ const fmt2 = new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR'
 const nf2 = new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const eur = n => fmt0.format(Math.round(n || 0));
 const eur2 = n => fmt2.format(n || 0);
-const kEur = n => Math.abs(n) >= 1000 ? (n / 1000).toLocaleString('es-ES', { maximumFractionDigits: 1 }) + ' k€' : Math.round(n) + ' €';
+const kEur = n => Math.abs(n) >= 1000 ? (n / 1000).toLocaleString('es-ES', { maximumFractionDigits: 1 }) + ' k€'
+  : (Math.abs(n) < 10 && n % 1 ? n.toLocaleString('es-ES', { maximumFractionDigits: 2 }) : Math.round(n)) + ' €';
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const iniciales = n => String(n || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
 function fechaCorta(iso) { if (!iso) return ''; const [, m, d] = iso.split('-').map(Number); return d + ' ' + MESES[m - 1].toLowerCase(); }
