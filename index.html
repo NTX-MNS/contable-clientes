@@ -6,6 +6,9 @@
 <meta name="theme-color" content="#0a0a0c">
 <meta name="robots" content="noindex, nofollow">
 <meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src data:; connect-src https://script.google.com https://script.googleusercontent.com; base-uri 'none'; form-action 'none'">
+<script>window.CONTABLE_API = 'https://script.google.com/macros/s/AKfycbxSVZ19i5hY9l-4AzCOgSECuQ-KSHfStyD6cfEhvEsPSNVR3YqL8sBAs0oS8aJwUm9c/exec';</script>
+<script>if (window.top !== window.self) { document.documentElement.innerHTML = ''; window.top.location = window.self.location.href; }</script>
 <title>CONTABLE</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -179,6 +182,10 @@ td .s.back { color: var(--ok); }
 .aviso { font-size: 13px; color: #cfc6b3; line-height: 1.55; background: var(--acc-bg); border: 1px solid #3a3122; border-radius: 10px; padding: 10px 12px; }
 .ro { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); }
 
+/* ---------- Vista general ---------- */
+#tablaClientes tbody tr:hover td { background: var(--panel); }
+#porCliente .hb:hover .l, #avisos .rev:hover, #agenda .rev[data-cli]:not([data-cli=""]):hover { color: var(--tx); }
+
 /* ---------- Diálogos ---------- */
 dialog { border: 1px solid var(--line2); border-radius: 20px; padding: 0; background: var(--bg2); color: var(--tx); width: min(560px, calc(100vw - 32px)); margin: auto; }
 dialog.wide { width: min(900px, calc(100vw - 32px)); }
@@ -302,6 +309,11 @@ tr:hover .copy { opacity: 1; }
     <label>Nombre de tu asesoría (aparece en los correos a clientes)<input name="nombreAsesoria" placeholder="Asesoría Nacho"></label>
     <label>URL pública de la web app (clientes y HARVI)<input name="publicUrl" placeholder="https://script.google.com/macros/s/…/exec"></label>
     <label>Página del dashboard del cliente (GitHub Pages)<input name="clientUrl" placeholder="https://tuusuario.github.io/contable/"></label>
+    <label>Calendario de Apple para tus reuniones (enlace webcal de iCloud) <span id="icalState" style="text-transform:none;letter-spacing:0;color:var(--dim)"></span><input name="icalUrl" placeholder="webcal://pXX-caldav.icloud.com/published/2/…" autocomplete="off"></label>
+    <div>
+      <div class="toggle"><span>Vencimientos en tu Calendario de Apple</span><button class="btn sm" type="button" id="calBtn">Generar enlace</button></div>
+      <div class="note" id="calInfo"></div>
+    </div>
     <div class="toggle"><span>Revisar carpetas automáticamente cada 15 min</span><input type="checkbox" name="trigger"></div>
     <div class="toggle"><span>Releer con Opus las facturas que Haiku lea con dudas</span><input type="checkbox" name="escalarOpus"></div>
     <div>
@@ -348,7 +360,6 @@ tr:hover .copy { opacity: 1; }
   </div>
 </dialog>
 
-<script>window.CONTABLE_API = 'https://script.google.com/macros/s/AKfycbxSVZ19i5hY9l-4AzCOgSECuQ-KSHfStyD6cfEhvEsPSNVR3YqL8sBAs0oS8aJwUm9c/exec';</script>
 <script>
 /* =========================================================================
    Modo (asesor / cliente) y llamadas al servidor
@@ -426,11 +437,11 @@ async function init() {
   try { S.clientes = (await api('apiListarClientes')) || []; } catch (e) { return fail(e); }
   pintarMenu();
   if (!S.clientes.length) return vacio();
-  const ultimo = store.get('cliente');
-  seleccionar(S.clientes.some(c => c.id === ultimo) ? ultimo : S.clientes[0].id);
+  verGeneral();
 }
 
 async function cargar() {
+  if (MODO === 'asesor' && !S.id) return verGeneral();
   skeleton();
   try {
     S.d = MODO === 'cliente' ? await api('apiDashboardCliente', TOKEN, S.year) : await api('apiDashboard', S.id, S.year);
@@ -474,7 +485,7 @@ function pintarMenu(filtro) {
   if (MODO === 'cliente') return;
   const f = (filtro || '').toLowerCase();
   const lista = S.clientes.filter(c => !f || c.nombre.toLowerCase().includes(f) || String(c.nif).toLowerCase().includes(f));
-  $('#menuList').innerHTML = lista.map(c => `<div class="item ${c.id === S.id ? 'sel' : ''}" data-id="${esc(c.id)}" role="option">
+  $('#menuList').innerHTML = (f ? '' : `<div class="item ${!S.id ? 'sel' : ''}" data-general="1" role="option"><span class="dot" style="background:var(--acc)"></span><div><div>Vista general</div><small>Todos los clientes, avisos y agenda</small></div></div>`) + lista.map(c => `<div class="item ${c.id === S.id ? 'sel' : ''}" data-id="${esc(c.id)}" role="option">
       <span class="dot" style="background:${esc(c.color)}"></span><div><div>${esc(c.nombre)}</div><small>${esc(c.nif)}${c.actividad ? ' · ' + esc(c.actividad) : ''}</small></div></div>`).join('')
     || '<div class="item" style="cursor:default;color:var(--dim)">Sin resultados</div>';
 }
@@ -482,7 +493,7 @@ if (MODO === 'asesor') {
   $('#pickerBtn').onclick = e => { e.stopPropagation(); const m = $('#menu'); m.classList.toggle('open'); if (m.classList.contains('open')) { $('#menuSearch').value = ''; pintarMenu(); $('#menuSearch').focus(); } };
   $('#menuSearch').oninput = e => pintarMenu(e.target.value);
   $('#menuSearch').onkeydown = e => { if (e.key === 'Enter') { const first = $('#menuList .item[data-id]'); if (first) seleccionar(first.dataset.id); } };
-  $('#menuList').onclick = e => { const it = e.target.closest('.item[data-id]'); if (it) seleccionar(it.dataset.id); };
+  $('#menuList').onclick = e => { if (e.target.closest('[data-general]')) return verGeneral(); const it = e.target.closest('.item[data-id]'); if (it) seleccionar(it.dataset.id); };
   $('#menuNew').onclick = () => { $('#menu').classList.remove('open'); abrirFicha(); };
   document.addEventListener('click', e => { if (!e.target.closest('.picker')) $('#menu').classList.remove('open'); });
 }
@@ -858,9 +869,11 @@ function resumenProc(r) {
 
 if (MODO === 'asesor') {
   $('#procBtn').onclick = async e => {
-    if (!S.id) return;
     const b = e.currentTarget; busy(b, true);
-    try { const r = await api('apiProcesar', S.id); toast(resumenProc(r)); await cargar(); }
+    try {
+      if (!S.id) { await api('apiProcesarTodo'); toast('Carpetas de todos los clientes revisadas'); await verGeneral(); }
+      else { const r = await api('apiProcesar', S.id); toast(resumenProc(r)); await cargar(); }
+    }
     catch (err) { toast(err.message || err); }
     busy(b, false);
   };
@@ -889,12 +902,16 @@ if (MODO === 'asesor') {
 
   $('#setBtn').onclick = async () => { pintarAjustes(await api('apiEstadoAjustes') || {}); $('#dlgAjustes').showModal(); };
   $('#tokBtn').onclick = async () => pintarAjustes(await api('apiGuardarAjustes', { generarToken: true }) || {});
+  $('#calBtn').onclick = async () => {
+    if ($('#calInfo').dataset.hay && !confirm('Se creará un enlace nuevo y el anterior dejará de funcionar. ¿Continuar?')) return;
+    pintarAjustes(await api('apiGuardarAjustes', { generarCalToken: true }) || {});
+  };
   $('#fAjustes').onsubmit = async e => {
     if (e.submitter && e.submitter.value === 'cancel') return;
     e.preventDefault();
     const f = e.target;
     try {
-      await api('apiGuardarAjustes', { apiKey: f.apiKey.value, trigger: f.trigger.checked, publicUrl: f.publicUrl.value, escalarOpus: f.escalarOpus.checked, nombreAsesoria: f.nombreAsesoria.value, clientUrl: f.clientUrl.value });
+      await api('apiGuardarAjustes', { apiKey: f.apiKey.value, trigger: f.trigger.checked, publicUrl: f.publicUrl.value, escalarOpus: f.escalarOpus.checked, nombreAsesoria: f.nombreAsesoria.value, clientUrl: f.clientUrl.value, icalUrl: f.icalUrl.value });
       $('#dlgAjustes').close(); toast('Ajustes guardados');
     } catch (err) { toast(err.message || err); }
   };
@@ -936,6 +953,13 @@ function pintarAjustes(a) {
   $('#fAjustes').publicUrl.value = a.publicUrl || '';
   $('#fAjustes').nombreAsesoria.value = a.nombreAsesoria || '';
   $('#fAjustes').clientUrl.value = a.clientUrl || '';
+  $('#fAjustes').icalUrl.value = '';
+  $('#icalState').textContent = a.icalUrl ? '· conectado ✓ (pega otro para cambiarlo)' : '· sin conectar';
+  $('#calInfo').dataset.hay = a.calendarioUrl ? '1' : '';
+  $('#calInfo').innerHTML = a.calendarioUrl
+    ? `En Calendario del Mac: <b>Archivo → Nueva suscripción a calendario</b> y pega este enlace (en el iPhone: Ajustes → Calendario → Cuentas → Añadir cuenta → Otra → Añadir calendario suscrito):<br><code>${esc(a.calendarioUrl)}</code> <button class="btn sm" type="button" data-copiar="${esc(a.calendarioUrl)}">Copiar</button>`
+    : 'Genera un enlace privado para ver los vencimientos de todos tus clientes, con aviso 3 días antes, en el Calendario del Mac y del iPhone.';
+  const bc = $('#calInfo').querySelector('[data-copiar]'); if (bc) bc.onclick = () => copiar(bc.dataset.copiar);
   $('#tokInfo').innerHTML = a.harviToken
     ? `Token: <code>${esc(a.harviToken)}</code><br>Endpoint: <code>${esc(a.publicUrl || a.url || '')}?api=resumen&amp;cliente=ID&amp;year=${S.year}&amp;token=…</code>`
     : 'Genera un token cuando vayas a conectar HARVI.';
@@ -955,7 +979,214 @@ async function abrirEnlace(renovar) {
   } catch (e) { toast(e.message || e); }
 }
 
-let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => S.d && render(), 150); });
+/* =========================================================================
+   Vista general de todos los clientes (asesor)
+   ========================================================================= */
+async function verGeneral() {
+  S.id = null; S.d = null; store.set('cliente', '');
+  $('#pickerName').textContent = 'Vista general';
+  $('#pickerDot').style.background = 'var(--acc)';
+  $('#menu').classList.remove('open');
+  skeleton();
+  try { S.g = await api('apiVistaGeneral', S.year); renderGeneral(); }
+  catch (e) { fail(e); }
+}
+
+function serieDiaria(g, dias) {
+  const mapa = {};
+  g.clientes.forEach(c => (c.diario || []).forEach(d => {
+    const m = mapa[d.fecha] = mapa[d.fecha] || { ingresos: 0, gastos: 0, porCliente: {} };
+    m.ingresos += d.ingresos; m.gastos += d.gastos;
+    if (d.ingresos) m.porCliente[c.nombre] = (m.porCliente[c.nombre] || 0) + d.ingresos;
+  }));
+  const fin = g.year === Number(g.hoy.slice(0, 4)) ? new Date(g.hoy + 'T12:00:00Z') : new Date(g.year + '-12-31T12:00:00Z');
+  const out = [];
+  for (let i = dias - 1; i >= 0; i--) {
+    const d = new Date(fin); d.setUTCDate(d.getUTCDate() - i);
+    const f = d.toISOString().slice(0, 10);
+    out.push(Object.assign({ fecha: f }, mapa[f] || { ingresos: 0, gastos: 0, porCliente: {} }));
+  }
+  return out;
+}
+
+function renderGeneral() {
+  const g = S.g;
+  document.documentElement.style.setProperty('--accent', '#c9a96e');
+  $('#yearSel').innerHTML = (g.anios || [g.year]).map(y => `<option ${y === g.year ? 'selected' : ''}>${y}</option>`).join('');
+  if (!g.clientes.length) return vacio();
+  const tot = g.clientes.reduce((s, c) => ({ ing: s.ing + c.ingresos, gas: s.gas + c.gastos, doc: s.doc + c.documentos, rev: s.rev + c.revisar + (c.errores || 0), prev: s.prev + (c.ingresosAnteriorMismoPeriodo || 0) }), { ing: 0, gas: 0, doc: 0, rev: 0, prev: 0 });
+  const delta = tot.prev ? Math.round((tot.ing - tot.prev) / tot.prev * 100) : null;
+  const proximos = [];
+  g.clientes.forEach(c => (c.vencimientos || []).forEach(v => { if (v.fecha >= g.hoy && diasHasta(v.fecha, g.hoy) <= 30) proximos.push(Object.assign({ cliente: c.nombre, clienteId: c.id }, v)); }));
+  proximos.sort((a, b) => a.fecha < b.fecha ? -1 : 1);
+  const aIngresar = proximos.filter(v => v.estado === 'ingresar').reduce((s, v) => s + Math.abs(v.importe || 0), 0);
+  const altas = g.alertas.filter(a => a.nivel === 'alta').length;
+  const seg = g.seguridad || {};
+
+  $('#app').innerHTML = `
+  <div class="client">
+    <div class="avatar" style="border-color:var(--acc);color:var(--acc)">∑</div>
+    <div><h1>Vista general</h1><div class="meta">${g.clientes.length} cliente${g.clientes.length === 1 ? '' : 's'} · ${g.year}</div></div>
+    <div class="chips">
+      ${altas ? `<span class="chip crit">${altas} aviso${altas === 1 ? '' : 's'} urgente${altas === 1 ? '' : 's'}</span>` : '<span class="chip good">✓ Sin urgencias</span>'}
+      <span class="chip ${seg.bloqueado ? 'crit' : seg.fallos24h ? 'warn' : 'good'}">${seg.bloqueado ? '⛨ Bloqueo activo' : seg.fallos24h ? '⛨ ' + seg.fallos24h + ' intentos sospechosos' : '⛨ Seguro'}</span>
+      <button class="btn sm" id="recalcTodo"><span class="spin"></span>↻ Recalcular todo</button>
+    </div>
+  </div>
+
+  <section class="grid g-kpi" style="margin-top:0">
+    <div class="card"><h3>Facturación ${g.year}</h3><div class="kpi-num num">${eur(tot.ing)}</div>
+      <div class="sub">${delta == null ? 'Todos los clientes' : `<span style="color:${delta >= 0 ? 'var(--ok)' : 'var(--err)'}">${delta >= 0 ? '▲' : '▼'} ${Math.abs(delta)} %</span> vs mismo periodo ${g.year - 1}`}</div></div>
+    <div class="card"><h3>Gastos ${g.year}</h3><div class="kpi-num num">${eur(tot.gas)}</div><div class="sub">Rendimiento ${eur(tot.ing - tot.gas)}</div></div>
+    <div class="card"><h3>Impuestos próximos 30 días</h3><div class="kpi-num num">${eur(aIngresar)}</div>
+      <div class="sub">${proximos.length ? proximos.length + ' presentaciones · la primera el ' + fechaCorta(proximos[0].fecha) : 'Sin presentaciones cercanas'}</div></div>
+    <div class="card"><h3>Documentos</h3><div class="kpi-num num">${tot.doc}</div><div class="sub">${tot.rev ? tot.rev + ' pendientes de revisar' : 'Todo revisado'}</div></div>
+  </section>
+
+  <section class="grid g-3">
+    <div class="card">
+      <div class="head"><div><h3>Evolución diaria · todos los clientes</h3><div class="sub">Base imponible facturada cada día</div></div>
+        <div class="tabs" id="diaTabs"><button data-n="30" class="${S.dias === 30 ? 'on' : ''}">30 días</button><button data-n="90" class="${S.dias !== 30 ? 'on' : ''}">90 días</button></div></div>
+      <div class="chart" id="diario"></div>
+      <div class="legend" style="margin-top:8px"><span><b style="background:var(--s1)"></b>Ingresos</span><span><b style="background:var(--s2)"></b>Gastos</span></div>
+    </div>
+    <div class="card"><div class="head"><div><h3>Avisos</h3><div class="sub">Plazos, revisiones, actividad y seguridad</div></div></div><div id="avisos"></div></div>
+  </section>
+
+  <section class="grid g-2">
+    <div class="card"><div class="head"><div><h3>Facturación por cliente</h3><div class="sub">${g.year} · progreso vs mismo periodo del año anterior</div></div></div><div id="porCliente"></div></div>
+    <div class="card"><div class="head"><div><h3>Agenda</h3><div class="sub">Reuniones (calendario de Apple) y vencimientos · próximos 14 días</div></div></div><div id="agenda"></div></div>
+  </section>
+
+  <section class="card">
+    <div class="head"><div><h3>Ingresos y gastos por mes · todos los clientes</h3><div class="sub">Base imponible · ${g.year}</div></div>
+      <div class="legend"><span><b style="background:var(--s1)"></b>Ingresos</span><span><b style="background:var(--s2)"></b>Gastos</span></div></div>
+    <div class="chart" id="monthly"></div>
+  </section>
+
+  <div class="sec-title">Clientes</div>
+  <section class="card" style="margin-top:0"><div class="tablewrap" id="tablaClientes"></div></section>
+
+  <div class="sec-title">Seguridad</div>
+  <section class="card" style="margin-top:0" id="seguridad"></section>
+  `;
+
+  S.dias = S.dias || 90;
+  pintarDiario(g, S.dias);
+  document.querySelectorAll('#diaTabs button').forEach(b => b.onclick = () => { S.dias = +b.dataset.n; document.querySelectorAll('#diaTabs button').forEach(x => x.classList.toggle('on', x === b)); pintarDiario(g, S.dias); });
+  pintarAvisos(g);
+  pintarPorCliente(g);
+  pintarAgenda(g, proximos);
+  const mensual = Array.from({ length: 12 }, (_, i) => ({ mes: i + 1, ventas: 0, tpv: 0, gastos: 0 }));
+  g.clientes.forEach(c => (c.mensual || []).forEach((m, i) => { mensual[i].ventas += m[0]; mensual[i].gastos += m[1]; }));
+  pintarMensual({ mensual: mensual, year: g.year });
+  pintarTablaClientes(g);
+  pintarSeguridad(seg);
+  $('#recalcTodo').onclick = async e => { busy(e.currentTarget, true); try { const n = await api('apiRecalcularTodo', S.year); toast(n + ' clientes recalculados'); verGeneral(); } catch (err) { toast(err.message || err); busy(e.currentTarget, false); } };
+  document.querySelectorAll('[data-cli]').forEach(el => el.onclick = () => { if (el.dataset.cli) seleccionar(el.dataset.cli); });
+}
+
+function pintarDiario(g, dias) {
+  const el = $('#diario'); const W = el.clientWidth, H = 220, m = { t: 10, r: 4, b: 24, l: 50 };
+  const serie = serieDiaria(g, dias);
+  const iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const max = niceMax(Math.max(...serie.map(d => Math.max(d.ingresos, d.gastos)), 1));
+  const band = iw / serie.length, bw = Math.max(1, band - 2);
+  let s = `<svg width="${W}" height="${H}">`;
+  for (let i = 0; i <= 4; i++) {
+    const y = m.t + ih - ih * i / 4;
+    s += `<line x1="${m.l}" x2="${W - m.r}" y1="${y}" y2="${y}" stroke="${i ? css('--line') : css('--line2')}"/><text x="${m.l - 8}" y="${y + 4}" text-anchor="end">${kEur(max * i / 4)}</text>`;
+  }
+  const pts = serie.map((d, i) => `${(m.l + band * i + band / 2).toFixed(1)},${(m.t + ih - Math.max(0, d.gastos) / max * ih).toFixed(1)}`);
+  serie.forEach((d, i) => {
+    const h = Math.max(0, d.ingresos) / max * ih;
+    s += `<path d="${barPath(m.l + band * i + (band - bw) / 2, m.t + ih - h, bw, h, Math.min(3, bw / 2))}" fill="var(--s1)" pointer-events="none"/>`;
+    s += `<rect class="hd" data-i="${i}" x="${m.l + band * i}" y="${m.t}" width="${band}" height="${ih}" fill="transparent"/>`;
+    if (i % Math.ceil(serie.length / 6) === 0) s += `<text x="${m.l + band * i + band / 2}" y="${H - 6}" text-anchor="middle">${fechaCorta(d.fecha)}</text>`;
+  });
+  s += `<polyline points="${pts.join(' ')}" fill="none" stroke="var(--s2)" stroke-width="1.5" stroke-linejoin="round" pointer-events="none"/>`;
+  el.innerHTML = s + '</svg>';
+  el.querySelectorAll('.hd').forEach(rc => {
+    rc.onmousemove = ev => {
+      const d = serie[+rc.dataset.i];
+      const top = Object.keys(d.porCliente).sort((a, b) => d.porCliente[b] - d.porCliente[a]).slice(0, 4);
+      showTip(`<div class="t">${fechaCorta(d.fecha)}</div>${tipRow('var(--s1)', 'Ingresos', eur2(d.ingresos))}${tipRow('var(--s2)', 'Gastos', eur2(d.gastos))}
+        ${top.map(n => `<div class="r" style="padding-left:14px"><span>· ${esc(n)}</span><span>${eur2(d.porCliente[n])}</span></div>`).join('')}`, ev);
+    };
+    rc.onmouseleave = hideTip;
+  });
+}
+
+function pintarAvisos(g) {
+  const icono = { vencimiento: '⏱', revisar: '⚑', credito: '€', error: '✕', ignorado: '?', inactivo: '…', invitacion: '✉', dato: 'ℹ', reunion: '◷', seguridad: '⛨' };
+  $('#avisos').innerHTML = g.alertas.length ? g.alertas.slice(0, 12).map(a => `<div class="rev" style="cursor:${a.clienteId ? 'pointer' : 'default'}" data-cli="${esc(a.clienteId || '')}">
+      <span class="chip ${a.nivel === 'alta' ? 'crit' : a.nivel === 'media' ? 'warn' : ''}" style="min-width:34px;justify-content:center">${icono[a.tipo] || '•'}</span>
+      <div class="grow"><div>${a.cliente ? esc(a.cliente) : 'CONTABLE'}${a.fecha ? ` <span class="sub">· ${fechaCorta(a.fecha)} · ${cuando(a.fecha, g.hoy)}</span>` : ''}</div><div class="why">${esc(a.texto)}</div></div></div>`).join('')
+    + (g.alertas.length > 12 ? `<div class="note">y ${g.alertas.length - 12} avisos más de menor prioridad</div>` : '')
+    : '<div class="na">✓ Nada pendiente. Todo al día.</div>';
+}
+
+function pintarPorCliente(g) {
+  const lista = g.clientes.slice().sort((a, b) => b.ingresos - a.ingresos);
+  const max = Math.max(...lista.map(c => c.ingresos), 1);
+  $('#porCliente').innerHTML = lista.map(c => {
+    const d = c.ingresosAnteriorMismoPeriodo ? Math.round((c.ingresos - c.ingresosAnteriorMismoPeriodo) / c.ingresosAnteriorMismoPeriodo * 100) : null;
+    return `<div class="hb" data-cli="${esc(c.id)}" style="cursor:pointer" title="${esc(c.nombre)}: ${eur2(c.ingresos)}">
+      <span class="l"><span class="dot" style="background:${esc(c.color)};margin-right:6px"></span>${esc(c.nombre)}</span>
+      <span class="track"><span class="bar" style="width:${Math.max(0, c.ingresos) / max * 100}%;background:var(--s1)"></span></span>
+      <span class="v">${eur(c.ingresos)} ${d == null ? '' : `<span class="sub" style="color:${d >= 0 ? 'var(--ok)' : 'var(--err)'}">${d >= 0 ? '▲' : '▼'}${Math.abs(d)}%</span>`}</span></div>`;
+  }).join('') || '<div class="na">Aún no hay datos.</div>';
+}
+
+function pintarAgenda(g, proximos) {
+  const items = [];
+  (g.agenda || []).forEach(ev => { if (ev.error) items.push({ error: ev.error }); else if (diasHasta(ev.fecha, g.hoy) <= 14) items.push(Object.assign({ tipo: 'reunion' }, ev)); });
+  proximos.filter(v => diasHasta(v.fecha, g.hoy) <= 14).forEach(v => items.push({ tipo: 'venc', fecha: v.fecha, hora: '', titulo: 'Modelo ' + v.modelo + ' ' + v.periodo + (v.importe != null ? ' · ' + eur2(Math.abs(v.importe)) : ''), cliente: v.cliente, clienteId: v.clienteId }));
+  items.sort((a, b) => (a.fecha || '') + (a.hora || '') < (b.fecha || '') + (b.hora || '') ? -1 : 1);
+  const sinCal = !(g.agenda || []).length;
+  $('#agenda').innerHTML = items.map(x => x.error ? `<div class="aviso">${esc(x.error)}</div>` : `<div class="rev" data-cli="${esc(x.clienteId || '')}" style="cursor:${x.clienteId ? 'pointer' : 'default'}">
+      <span class="chip ${x.tipo === 'reunion' ? '' : 'warn'}" style="min-width:76px;justify-content:center">${fechaCorta(x.fecha)}${x.hora ? ' ' + esc(x.hora) : ''}</span>
+      <div class="grow"><div>${x.tipo === 'reunion' ? '◷ ' : '⏱ '}${esc(x.titulo)}</div><div class="why">${x.cliente ? esc(x.cliente) : (x.tipo === 'reunion' ? 'Sin cliente asociado' : '')}${x.lugar ? ' · ' + esc(x.lugar) : ''}</div></div></div>`).join('')
+    || '<div class="na">Nada en los próximos 14 días.</div>';
+  if (sinCal) $('#agenda').innerHTML += '<p class="note">Conecta tu calendario de Apple en ⚙ Ajustes para ver aquí tus reuniones con clientes.</p>';
+}
+
+function sparkMini(valores, color) {
+  const W = 90, H = 24, max = Math.max(...valores, 1);
+  const pts = valores.map((v, i) => `${(i / Math.max(valores.length - 1, 1) * (W - 2) + 1).toFixed(1)},${(H - 2 - Math.max(0, v) / max * (H - 4)).toFixed(1)}`).join(' ');
+  return `<svg width="${W}" height="${H}" style="vertical-align:middle"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
+}
+
+function pintarTablaClientes(g) {
+  const mesHoy = g.year === Number(g.hoy.slice(0, 4)) ? Number(g.hoy.slice(5, 7)) : 12;
+  $('#tablaClientes').innerHTML = `<table><thead><tr><th>Cliente</th><th>Facturación</th><th>Trimestre</th><th>IVA próximo</th><th>IRPF próximo</th><th>Docs</th><th>Pendiente</th><th>Última factura</th><th>Tendencia</th></tr></thead><tbody>
+    ${g.clientes.slice().sort((a, b) => b.ingresos - a.ingresos).map(c => {
+      const t = (c.trimestres || [])[(c.tLiquidar || 1) - 1] || {};
+      const tc = (c.trimestres || [])[(c.tEnCurso || 1) - 1] || {};
+      const pend = (c.revisar || 0) + (c.errores || 0);
+      return `<tr data-cli="${esc(c.id)}" style="cursor:pointer">
+        <td><span class="dot" style="background:${esc(c.color)};margin-right:8px"></span>${esc(c.nombre)}${c.sinDatos ? ' <span class="sub">sin datos</span>' : ''}</td>
+        <td>${eur2(c.ingresos)}</td><td>${eur2(tc.ingresos || 0)}<span class="s">${c.tEnCurso || ''}T en curso</span></td>
+        <td>${c.aplica && c.aplica.iva === false ? '<span class="s">—</span>' : eur2(Math.abs(t.iva || 0)) + `<span class="s">${c.tLiquidar || ''}T</span>`}</td>
+        <td>${c.aplica && c.aplica.irpf130 ? eur2(t.irpf || 0) + `<span class="s">${c.tLiquidar || ''}T</span>` : '<span class="s">—</span>'}</td>
+        <td>${c.documentos}</td><td>${pend ? `<span class="chip warn">${pend}</span>` : '<span class="s">—</span>'}</td>
+        <td>${c.ultimaFecha ? fechaCorta(c.ultimaFecha) : '<span class="s">—</span>'}</td>
+        <td>${sparkMini((c.mensual || []).slice(0, mesHoy).map(m => m[0]), c.color || '#c9a96e')}</td></tr>`;
+    }).join('')}</tbody></table>`;
+}
+
+function pintarSeguridad(seg) {
+  $('#seguridad').innerHTML = `<div class="grid g-kpi" style="gap:10px">
+      <div><div class="lbl">Estado</div><div class="kpi-num" style="font-size:20px;color:${seg.bloqueado ? 'var(--err)' : 'var(--ok)'}">${seg.bloqueado ? 'Bloqueado' : 'Protegido'}</div><div class="sub">${seg.bloqueado ? esc(seg.bloqueado) : 'Cortafuegos activo'}</div></div>
+      <div><div class="lbl">Intentos no válidos · 24 h</div><div class="kpi-num" style="font-size:20px">${seg.fallos24h || 0}</div><div class="sub">Se bloquea a los 30 en 10 min</div></div>
+      <div><div class="lbl">Visitas de clientes · 24 h</div><div class="kpi-num" style="font-size:20px">${seg.accesosClientes24h || 0}</div><div class="sub">A sus dashboards</div></div>
+      <div><div class="lbl">Último bloqueo</div><div class="sub" style="margin-top:10px">${seg.ultimoBloqueo ? esc(seg.ultimoBloqueo) : 'Ninguno'}</div></div>
+    </div>
+    ${(seg.ultimos || []).length ? `<div style="margin-top:14px">${seg.ultimos.map(u => `<div class="rev"><span class="chip ${u.resultado === 'BLOQUEO' ? 'crit' : 'warn'}">${esc(u.resultado)}</span><div class="grow"><div>${esc(u.canal)} <span class="sub">· ${esc(u.fecha)}</span></div><div class="why">${esc(u.detalle)}</div></div></div>`).join('')}</div>` : ''}
+    <p class="note">Registro completo en la hoja «Seguridad» del Maestro. Si ves algo raro: renueva los enlaces de los clientes afectados y el token de HARVI.</p>`;
+}
+
+let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { if (S.id || MODO === 'cliente') { if (S.d) render(); } else if (S.g) renderGeneral(); }, 150); });
 init();
 </script>
 </body>
